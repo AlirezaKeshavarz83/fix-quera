@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "Fix Quera",
+  "version": "0.3.0",
+  "description": "نمایش ددلاین، هارد ددلاین و میزان تأخیر ارسال‌ها در کوئرا.",
+  "permissions": ["storage"],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "fix-quera@keshi.dev",
+      "data_collection_permissions": {
+        "required": ["none"]
+      }
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://quera.org/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
