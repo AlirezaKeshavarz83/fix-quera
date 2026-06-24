@@ -52,12 +52,16 @@ The cached data stays in your browser. It is not sent to the developer or stored
 
 This extension is intentionally lightweight: the implementation is a WebExtension manifest plus a single content script.
 
+To develop locally, clone this repo and load it as an unpacked extension in Chrome (`chrome://extensions/` → Load unpacked) or a temporary add-on in Firefox (`about:debugging` → Load Temporary Add-on).
+
 Useful local checks:
 
 ```sh
 node -e "JSON.parse(require('fs').readFileSync('manifest.json','utf8'))"
 node --check content.js
-scripts/package-release.sh 0.3.0
+scripts/package-release.sh <version>
 ```
+
+The project uses [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `docs:`, `chore:`). Local experiments, captures, and generated zips belong in `.local/` and should not be committed.
 
 Release notes are kept in [CHANGELOG.md](CHANGELOG.md). Maintainer and agent guidance lives in [AGENTS.md](AGENTS.md).
