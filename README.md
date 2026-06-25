@@ -26,21 +26,11 @@ Fix Quera does not use analytics, tracking, remote code, or external APIs. See [
 
 ### Chrome
 
-1. Download the Chrome release zip from the latest GitHub Release.
-2. Unzip it.
-3. Open `chrome://extensions/`.
-4. Enable Developer mode.
-5. Click Load unpacked.
-6. Select the unzipped extension folder.
-7. Reload any Quera tabs that were already open.
+Install from the [Chrome Web Store](https://chromewebstore.google.com/detail/fix-quera/ipdgalbogcfdhhjcjljkcpnalkpiehle).
 
 ### Firefox
 
-1. Download the Firefox release zip from the latest GitHub Release.
-2. Open `about:debugging#/runtime/this-firefox`.
-3. Click Load Temporary Add-on.
-4. Select `manifest.json` from the unzipped extension folder.
-5. Reload any Quera tabs that were already open.
+Firefox add-on coming soon.
 
 ## Permissions
 
