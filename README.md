@@ -28,9 +28,24 @@ Fix Quera does not use analytics, tracking, remote code, or external APIs. See [
 
 Install from the [Chrome Web Store](https://chromewebstore.google.com/detail/fix-quera/ipdgalbogcfdhhjcjljkcpnalkpiehle).
 
+To load a local build instead:
+
+1. Open `chrome://extensions/`.
+2. Enable Developer mode.
+3. Click Load unpacked.
+4. Select this project directory.
+5. Reload any Quera tabs that were already open.
+
 ### Firefox
 
 Firefox add-on coming soon.
+
+To load a local build:
+
+1. Open `about:debugging#/runtime/this-firefox`.
+2. Click Load Temporary Add-on.
+3. Select `manifest.json` from this project directory.
+4. Reload any Quera tabs that were already open.
 
 ## Permissions
 
