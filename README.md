@@ -13,6 +13,9 @@ Fix Quera is a browser extension that improves Quera course and assignment pages
 - Adds a `میزان تاخیر` column when Quera does not provide one, computing delay from the assignment deadline and each submission timestamp.
 - Shows per-assignment final-submission delay badges on course pages.
 - Shows `مجموع تاخیر` on course pages as the sum of displayed per-assignment delays.
+- Adds local follow/unfollow controls for courses.
+- Filters Quera's upcoming-deadline widget to show only followed courses.
+- Defaults active courses to followed and archived courses to unfollowed until the user chooses otherwise.
 - Caches course-page delay results for 10 minutes.
 - Refreshes stale course delay data through a throttled queue of 1 request per second.
 - Handles Quera client-side navigation without requiring a manual page reload after the extension is already loaded.
@@ -44,7 +47,7 @@ Release archives should contain only:
 Build them with:
 
 ```sh
-scripts/package-release.sh 0.3.0
+scripts/package-release.sh 0.4.0
 ```
 
 Generated archives are written to `dist/`. Do not commit them; upload them to the matching GitHub Release instead.
@@ -54,6 +57,8 @@ Generated archives are written to `dist/`. Do not commit them; upload them to th
 - The extension is intentionally a single content script.
 - Quera assignment pages expose deadline data through script globals such as `finish_time` and `extra_time`.
 - Course pages do not expose final delay data directly, so the extension fetches each assignment's `/submissions/final` page.
+- Quera's course list page exposes upcoming deadlines in `#__NEXT_DATA__` at `pageProps.course.course_deadline_widget_data`.
+- Course follow choices are stored locally in browser extension storage, with a same-device Quera-page storage mirror so deadline filtering can run before Quera renders.
 - The content script is injected on all `https://quera.org/*` pages so Quera's React/Next client-side navigation can be detected. Expensive work is still route-gated to course and assignment pages.
 
 ## Maintenance

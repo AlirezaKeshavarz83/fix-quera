@@ -4,6 +4,10 @@ const TOOLTIP_ID = "deadline-viewer-tooltip";
 const TEHRAN_TIME_ZONE = "Asia/Tehran";
 const COURSE_TOTAL_ID = "deadline-viewer-course-total";
 const COURSE_CACHE_PREFIX = "qdv-course-delay";
+const COURSE_FOLLOW_STATE_KEY = "qdv-course-follow-state:v1";
+const COURSE_FOLLOW_STATE_MIRROR_KEY = "qdv-course-follow-state-mirror:v1";
+const COURSE_FOLLOW_BUTTON_CLASS = "qdv-course-follow-button";
+const COURSE_FOLLOW_MENUITEM_CLASS = "qdv-course-follow-menuitem";
 const COURSE_CACHE_TTL_MS = 10 * 60 * 1000;
 const COURSE_QUEUE_BATCH_SIZE = 1;
 const COURSE_QUEUE_DELAY_MS = 1000;
@@ -28,6 +32,11 @@ let lastCourseAssignmentSignature = "";
 let lastBootRoute = "";
 let routePollTimer = null;
 let activeCourseRenderId = 0;
+let nextDataObserver = null;
+let courseFollowStateCache = null;
+let courseFollowStateReady = null;
+let courseFollowObserver = null;
+let courseFollowRenderTimer = null;
 
 function extractDeadlineData() {
   const data = {
@@ -269,6 +278,10 @@ function createDetailItem(detail) {
 }
 
 function injectStyles() {
+  if (!document.head) {
+    return;
+  }
+
   if (document.getElementById(STYLE_ID)) {
     return;
   }
@@ -591,6 +604,72 @@ function injectStyles() {
       color: #feb2b2;
       background: rgba(254, 178, 178, 0.12);
       border-color: rgba(254, 178, 178, 0.18);
+    }
+
+    .${COURSE_FOLLOW_BUTTON_CLASS} {
+      --qdv-primary: var(--colors-primary, #0076a6);
+      --qdv-primary-soft: var(--colors-primary-hover-opaque, rgba(0, 168, 214, 0.07));
+      --qdv-text: var(--chakra-colors-text-normal, #1a202c);
+      --qdv-border: var(--colors-border, var(--chakra-colors-border-gray, #e2e8f0));
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: fit-content;
+      min-height: 32px;
+      margin-top: 10px;
+      padding: 6px 12px;
+      color: var(--qdv-primary);
+      background: var(--qdv-primary-soft);
+      border: 1px solid transparent;
+      border-radius: 6px;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.5;
+      white-space: nowrap;
+    }
+
+    .${COURSE_FOLLOW_BUTTON_CLASS}:hover,
+    .${COURSE_FOLLOW_BUTTON_CLASS}:focus {
+      border-color: var(--qdv-primary);
+      outline: none;
+    }
+
+    .${COURSE_FOLLOW_BUTTON_CLASS}.is-unfollowed {
+      color: var(--chakra-colors-text-pale, #718096);
+      background: transparent;
+      border-color: var(--qdv-border);
+    }
+
+    .${COURSE_FOLLOW_MENUITEM_CLASS} {
+      display: flex;
+      align-items: center;
+      width: 100%;
+      min-height: 32px;
+      padding: 6px 12px;
+      color: inherit;
+      background: transparent;
+      border: 0;
+      cursor: pointer;
+      font: inherit;
+      text-align: right;
+      direction: rtl;
+    }
+
+    .${COURSE_FOLLOW_MENUITEM_CLASS}:hover,
+    .${COURSE_FOLLOW_MENUITEM_CLASS}:focus {
+      background: var(--chakra-colors-blackAlpha-100, rgba(0, 0, 0, 0.06));
+      outline: none;
+    }
+
+    html[data-theme="dark"] .${COURSE_FOLLOW_BUTTON_CLASS},
+    [data-theme="dark"] .${COURSE_FOLLOW_BUTTON_CLASS},
+    body.chakra-ui-dark .${COURSE_FOLLOW_BUTTON_CLASS} {
+      --qdv-primary: #91def3;
+      --qdv-primary-soft: rgba(145, 222, 243, 0.12);
+      --qdv-text: #edf2f7;
+      --qdv-border: #2d3748;
     }
   `;
 
@@ -949,6 +1028,10 @@ function isCoursePage() {
   return /^\/course\/\d+\/?$/.test(window.location.pathname);
 }
 
+function isCourseListPage() {
+  return /^\/course\/?$/.test(window.location.pathname);
+}
+
 function getExtensionStorage() {
   const api = globalThis.browser?.storage?.local || globalThis.chrome?.storage?.local;
 
@@ -991,12 +1074,275 @@ function storageSet(values) {
   });
 }
 
+function isExtensionContextInvalidatedError(error) {
+  return String(error?.message || error).includes("Extension context invalidated");
+}
+
+function runSafely(callback, warning) {
+  try {
+    return callback();
+  } catch (error) {
+    if (isExtensionContextInvalidatedError(error)) {
+      return undefined;
+    }
+
+    if (warning) {
+      console.warn(warning, error);
+    }
+
+    throw error;
+  }
+}
+
+function createEmptyCourseFollowState() {
+  return {
+    version: 1,
+    courses: {},
+    assignments: {},
+    overrides: {}
+  };
+}
+
+function normalizeCourseFollowState(value) {
+  const state = createEmptyCourseFollowState();
+
+  if (!value || typeof value !== "object") {
+    return state;
+  }
+
+  state.courses = value.courses && typeof value.courses === "object"
+    ? { ...value.courses }
+    : {};
+  state.assignments = value.assignments && typeof value.assignments === "object"
+    ? { ...value.assignments }
+    : {};
+  state.overrides = value.overrides && typeof value.overrides === "object"
+    ? { ...value.overrides }
+    : {};
+
+  return state;
+}
+
+async function readCourseFollowState() {
+  if (courseFollowStateCache) {
+    return cloneCourseFollowState(courseFollowStateCache);
+  }
+
+  if (!courseFollowStateReady) {
+    courseFollowStateReady = storageGet(COURSE_FOLLOW_STATE_KEY)
+      .then((values) => {
+        courseFollowStateCache = normalizeCourseFollowState(
+          values?.[COURSE_FOLLOW_STATE_KEY]
+        );
+        writeCourseFollowStateMirror(courseFollowStateCache);
+        return courseFollowStateCache;
+      })
+      .catch((error) => {
+        if (isExtensionContextInvalidatedError(error)) {
+          return createEmptyCourseFollowState();
+        }
+
+        console.warn("[Deadline Viewer] course follow state read failed", error);
+        courseFollowStateCache = createEmptyCourseFollowState();
+        return courseFollowStateCache;
+      });
+  }
+
+  await courseFollowStateReady;
+  return cloneCourseFollowState(courseFollowStateCache);
+}
+
+function cloneCourseFollowState(state) {
+  return {
+    version: 1,
+    courses: { ...(state?.courses || {}) },
+    assignments: { ...(state?.assignments || {}) },
+    overrides: { ...(state?.overrides || {}) }
+  };
+}
+
+function readCourseFollowStateMirror() {
+  try {
+    return normalizeCourseFollowState(
+      JSON.parse(window.localStorage.getItem(COURSE_FOLLOW_STATE_MIRROR_KEY) || "null")
+    );
+  } catch {
+    return createEmptyCourseFollowState();
+  }
+}
+
+function writeCourseFollowStateMirror(state) {
+  try {
+    window.localStorage.setItem(
+      COURSE_FOLLOW_STATE_MIRROR_KEY,
+      JSON.stringify(normalizeCourseFollowState(state))
+    );
+  } catch {
+    // The extension storage copy remains authoritative if page storage is unavailable.
+  }
+}
+
+async function writeCourseFollowState(state) {
+  const normalized = normalizeCourseFollowState(state);
+  courseFollowStateCache = normalized;
+  courseFollowStateReady = Promise.resolve(courseFollowStateCache);
+  writeCourseFollowStateMirror(normalized);
+  await storageSet({ [COURSE_FOLLOW_STATE_KEY]: normalized });
+}
+
+async function updateCourseFollowState(mutator) {
+  const state = await readCourseFollowState();
+  const nextState = mutator(state) || state;
+  await writeCourseFollowState(nextState);
+  return nextState;
+}
+
+function isCourseFollowedInState(state, courseId) {
+  const id = String(courseId || "");
+
+  if (!id) {
+    return true;
+  }
+
+  if (typeof state.overrides[id] === "boolean") {
+    return state.overrides[id];
+  }
+
+  const course = state.courses[id];
+  if (course && typeof course.isArchived === "boolean") {
+    return !course.isArchived;
+  }
+
+  return true;
+}
+
+function getCourseFollowLabel(followed) {
+  return followed ? "دنبال نکردن درس" : "دنبال کردن درس";
+}
+
+async function setCourseFollowOverride(course, followed) {
+  const courseInfo = normalizeCourseMetadata(course);
+  const courseId = courseInfo?.id;
+
+  if (!courseId) {
+    return null;
+  }
+
+  return updateCourseFollowState((state) => {
+    mergeCourseMetadataIntoState(state, [courseInfo]);
+    state.overrides[courseId] = Boolean(followed);
+    return state;
+  });
+}
+
+function normalizeCourseMetadata(course) {
+  if (!course || typeof course !== "object") {
+    return null;
+  }
+
+  const id = String(course.id || course.pk || course.courseId || "");
+  if (!id) {
+    return null;
+  }
+
+  const name = normalizeText(course.name || course.courseName || "");
+  const archivedValue = course.is_archived ?? course.isArchived;
+  const archivedBy = course.archived_by ?? course.archivedBy ?? null;
+  const metadata = {
+    id,
+    name,
+    archivedBy,
+    lastSeenAt: Date.now()
+  };
+
+  if (typeof archivedValue === "boolean") {
+    metadata.isArchived = archivedValue;
+  }
+
+  return metadata;
+}
+
+function mergeCourseMetadataIntoState(state, courses) {
+  let changed = false;
+
+  courses.forEach((course) => {
+    const normalized = normalizeCourseMetadata(course);
+    if (!normalized) {
+      return;
+    }
+
+    const previous = state.courses[normalized.id] || {};
+    state.courses[normalized.id] = {
+      ...previous,
+      ...normalized,
+      name: normalized.name || previous.name || normalized.id
+    };
+    changed = true;
+  });
+
+  return changed;
+}
+
+function mergeAssignmentMappingsIntoState(state, course, assignments) {
+  const normalizedCourse = normalizeCourseMetadata(course);
+  if (!normalizedCourse || !Array.isArray(assignments)) {
+    return false;
+  }
+
+  let changed = mergeCourseMetadataIntoState(state, [normalizedCourse]);
+
+  assignments.forEach((assignment) => {
+    const assignmentId = String(assignment?.pk || assignment?.id || "");
+    if (!assignmentId) {
+      return;
+    }
+
+    state.assignments[assignmentId] = {
+      assignmentId,
+      courseId: normalizedCourse.id,
+      courseName: normalizedCourse.name,
+      assignmentName: normalizeText(assignment.name || ""),
+      lastSeenAt: Date.now()
+    };
+    changed = true;
+  });
+
+  return changed;
+}
+
+async function persistFollowStateFromNextData(nextData) {
+  const course = nextData?.props?.pageProps?.course;
+  if (!course) {
+    return;
+  }
+
+  await updateCourseFollowState((state) => {
+    mergeFollowStateFromPageCourse(state, course);
+    return state;
+  });
+}
+
+function mergeFollowStateFromPageCourse(state, course) {
+  let changed = false;
+
+  const courseNodes = course.courses?.edges
+    ?.map((edge) => edge?.node)
+    .filter(Boolean) || [];
+  changed = mergeCourseMetadataIntoState(state, courseNodes) || changed;
+
+  if (course.id && course.name) {
+    changed = mergeAssignmentMappingsIntoState(state, course, course.assignments) || changed;
+  }
+
+  return changed;
+}
+
 function getCourseId() {
   return window.location.pathname.match(/^\/course\/(\d+)\/?$/)?.[1] || null;
 }
 
 function getCourseName() {
-  const heading = document.querySelector("h1");
+  const heading = document.querySelector("h1, h2");
   const headingText = normalizeText(heading?.textContent || "");
 
   if (headingText) {
@@ -1008,6 +1354,520 @@ function getCourseName() {
 
 function normalizeText(value) {
   return value.replace(/\s+/g, " ").trim();
+}
+
+function installPageDataResponseFilter() {
+  const root = document.documentElement || document.head;
+  if (!root || root.dataset.qdvPageDataResponseFilter === "true") {
+    return;
+  }
+
+  root.dataset.qdvPageDataResponseFilter = "true";
+
+  const script = document.createElement("script");
+  script.textContent = `(${pageDataResponseFilterScript.toString()})(${JSON.stringify({
+    mirrorKey: COURSE_FOLLOW_STATE_MIRROR_KEY
+  })});`;
+  root.appendChild(script);
+  script.remove();
+}
+
+function pageDataResponseFilterScript(config) {
+  if (window.__qdvPageDataResponseFilterInstalled) {
+    return;
+  }
+
+  window.__qdvPageDataResponseFilterInstalled = true;
+
+  const mirrorKey = config.mirrorKey;
+
+  function createEmptyState() {
+    return {
+      version: 1,
+      courses: {},
+      assignments: {},
+      overrides: {}
+    };
+  }
+
+  function normalizeState(value) {
+    const state = createEmptyState();
+
+    if (!value || typeof value !== "object") {
+      return state;
+    }
+
+    state.courses = value.courses && typeof value.courses === "object"
+      ? { ...value.courses }
+      : {};
+    state.assignments = value.assignments && typeof value.assignments === "object"
+      ? { ...value.assignments }
+      : {};
+    state.overrides = value.overrides && typeof value.overrides === "object"
+      ? { ...value.overrides }
+      : {};
+
+    return state;
+  }
+
+  function readMirror() {
+    try {
+      return normalizeState(JSON.parse(window.localStorage.getItem(mirrorKey) || "null"));
+    } catch {
+      return createEmptyState();
+    }
+  }
+
+  function writeMirror(state) {
+    try {
+      window.localStorage.setItem(mirrorKey, JSON.stringify(normalizeState(state)));
+    } catch {
+      // Extension storage remains authoritative if page storage is unavailable.
+    }
+  }
+
+  function normalizeTextValue(value) {
+    return String(value || "").replace(/\s+/g, " ").trim();
+  }
+
+  function normalizeCourse(course) {
+    if (!course || typeof course !== "object") {
+      return null;
+    }
+
+    const id = String(course.id || course.pk || course.courseId || "");
+    if (!id) {
+      return null;
+    }
+
+    const archivedValue = course.is_archived ?? course.isArchived;
+    const metadata = {
+      id,
+      name: normalizeTextValue(course.name || course.courseName || ""),
+      archivedBy: course.archived_by ?? course.archivedBy ?? null,
+      lastSeenAt: Date.now()
+    };
+
+    if (typeof archivedValue === "boolean") {
+      metadata.isArchived = archivedValue;
+    }
+
+    return metadata;
+  }
+
+  function mergeCourses(state, courses) {
+    let changed = false;
+
+    (courses || []).forEach((course) => {
+      const normalized = normalizeCourse(course);
+      if (!normalized) {
+        return;
+      }
+
+      const previous = state.courses[normalized.id] || {};
+      state.courses[normalized.id] = {
+        ...previous,
+        ...normalized,
+        name: normalized.name || previous.name || normalized.id
+      };
+      changed = true;
+    });
+
+    return changed;
+  }
+
+  function mergeAssignments(state, course, assignments) {
+    const normalizedCourse = normalizeCourse(course);
+    if (!normalizedCourse || !Array.isArray(assignments)) {
+      return false;
+    }
+
+    let changed = mergeCourses(state, [normalizedCourse]);
+
+    assignments.forEach((assignment) => {
+      const assignmentId = String(assignment?.pk || assignment?.id || "");
+      if (!assignmentId) {
+        return;
+      }
+
+      state.assignments[assignmentId] = {
+        assignmentId,
+        courseId: normalizedCourse.id,
+        courseName: normalizedCourse.name,
+        assignmentName: normalizeTextValue(assignment.name || ""),
+        lastSeenAt: Date.now()
+      };
+      changed = true;
+    });
+
+    return changed;
+  }
+
+  function mergeCourseContainer(state, course) {
+    let changed = false;
+    const courseNodes = course?.courses?.edges
+      ?.map((edge) => edge?.node)
+      .filter(Boolean) || [];
+
+    changed = mergeCourses(state, courseNodes) || changed;
+
+    if (course?.id && course?.name) {
+      changed = mergeAssignments(state, course, course.assignments) || changed;
+    }
+
+    return changed;
+  }
+
+  function isCourseFollowed(state, courseId) {
+    const id = String(courseId || "");
+
+    if (!id) {
+      return true;
+    }
+
+    if (typeof state.overrides[id] === "boolean") {
+      return state.overrides[id];
+    }
+
+    const course = state.courses[id];
+    if (course && typeof course.isArchived === "boolean") {
+      return !course.isArchived;
+    }
+
+    return true;
+  }
+
+  function shouldShowDeadline(deadline, state) {
+    const assignmentId = String(deadline?.id || "");
+    const mappedCourseId = state.assignments[assignmentId]?.courseId;
+
+    if (mappedCourseId) {
+      return isCourseFollowed(state, mappedCourseId);
+    }
+
+    const courseName = normalizeTextValue(deadline?.course_name || "");
+    if (!courseName) {
+      return true;
+    }
+
+    const matchingCourses = Object.values(state.courses).filter((course) => {
+      return normalizeTextValue(course.name || "") === courseName;
+    });
+
+    if (!matchingCourses.length) {
+      return true;
+    }
+
+    return matchingCourses.some((course) => {
+      return isCourseFollowed(state, course.id);
+    });
+  }
+
+  function getCourseContainers(rootValue) {
+    const containers = [];
+    const seen = new Set();
+
+    function visit(value, depth) {
+      if (!value || typeof value !== "object" || seen.has(value) || depth > 8) {
+        return;
+      }
+
+      seen.add(value);
+
+      if (Array.isArray(value.course_deadline_widget_data) || value.courses?.edges || value.assignments) {
+        containers.push(value);
+      }
+
+      if (Array.isArray(value)) {
+        value.slice(0, 80).forEach((item) => visit(item, depth + 1));
+        return;
+      }
+
+      Object.keys(value).slice(0, 80).forEach((key) => {
+        visit(value[key], depth + 1);
+      });
+    }
+
+    visit(rootValue?.props?.pageProps?.course, 0);
+    visit(rootValue?.pageProps?.course, 0);
+    visit(rootValue, 0);
+
+    return Array.from(new Set(containers));
+  }
+
+  function filterJsonText(text) {
+    if (!text || !text.includes("course_deadline_widget_data")) {
+      return { changed: false, text };
+    }
+
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      return { changed: false, text };
+    }
+
+    const state = readMirror();
+    let changed = false;
+
+    getCourseContainers(data).forEach((course) => {
+      mergeCourseContainer(state, course);
+
+      if (!Array.isArray(course.course_deadline_widget_data)) {
+        return;
+      }
+
+      const originalDeadlines = course.course_deadline_widget_data;
+      const filteredDeadlines = originalDeadlines.filter((deadline) => {
+        return shouldShowDeadline(deadline, state);
+      });
+
+      if (filteredDeadlines.length !== originalDeadlines.length) {
+        course.course_deadline_widget_data = filteredDeadlines;
+        changed = true;
+      }
+    });
+
+    writeMirror(state);
+
+    if (!changed) {
+      return { changed: false, text };
+    }
+
+    return { changed: true, text: JSON.stringify(data) };
+  }
+
+  function shouldTryResponse(url, contentType) {
+    return (
+      String(url || "").includes("/_next/data/") ||
+      String(contentType || "").includes("application/json")
+    );
+  }
+
+  const originalFetch = window.fetch;
+  if (typeof originalFetch === "function") {
+    window.fetch = async function qdvFilteredFetch(...args) {
+      const response = await originalFetch.apply(this, args);
+      const contentType = response.headers?.get?.("content-type") || "";
+
+      if (!shouldTryResponse(response.url || args[0]?.url || args[0], contentType)) {
+        return response;
+      }
+
+      try {
+        const text = await response.clone().text();
+        const result = filterJsonText(text);
+
+        if (!result.changed) {
+          return response;
+        }
+
+        const headers = new Headers(response.headers);
+        headers.delete("content-length");
+
+        return new Response(result.text, {
+          status: response.status,
+          statusText: response.statusText,
+          headers
+        });
+      } catch {
+        return response;
+      }
+    };
+  }
+
+  const xhrPrototype = window.XMLHttpRequest?.prototype;
+  if (xhrPrototype?.open && xhrPrototype?.send && !xhrPrototype.__qdvFiltered) {
+    const originalOpen = xhrPrototype.open;
+    const originalSend = xhrPrototype.send;
+
+    xhrPrototype.__qdvFiltered = true;
+    xhrPrototype.open = function qdvOpen(method, url, ...args) {
+      this.__qdvRequestUrl = String(url || "");
+      return originalOpen.call(this, method, url, ...args);
+    };
+
+    xhrPrototype.send = function qdvSend(...args) {
+      this.addEventListener("readystatechange", function qdvReadystatechange() {
+        if (this.readyState !== 4) {
+          return;
+        }
+
+        const contentType = this.getResponseHeader?.("content-type") || "";
+        if (!shouldTryResponse(this.__qdvRequestUrl, contentType)) {
+          return;
+        }
+
+        try {
+          const result = filterJsonText(this.responseText || "");
+          if (!result.changed) {
+            return;
+          }
+
+          Object.defineProperty(this, "responseText", {
+            configurable: true,
+            get() {
+              return result.text;
+            }
+          });
+
+          if (!this.responseType || this.responseType === "text") {
+            Object.defineProperty(this, "response", {
+              configurable: true,
+              get() {
+                return result.text;
+              }
+            });
+          }
+        } catch {
+          // Leave the original response untouched if the browser refuses overrides.
+        }
+      }, true);
+
+      return originalSend.apply(this, args);
+    };
+  }
+}
+
+function installNextDataFilter() {
+  if (nextDataObserver) {
+    return;
+  }
+
+  filterNextDataWhenAvailable();
+
+  nextDataObserver = new MutationObserver(() => {
+    runSafely(() => {
+      filterNextDataWhenAvailable();
+    });
+  });
+
+  nextDataObserver.observe(document.documentElement || document, {
+    childList: true,
+    characterData: true,
+    subtree: true
+  });
+}
+
+function filterNextDataWhenAvailable() {
+  const script = document.getElementById("__NEXT_DATA__");
+  if (!script?.textContent) {
+    return;
+  }
+
+  const signature = getNextDataFilterSignature(script);
+  if (script.dataset.qdvDeadlineFilterSignature === signature) {
+    return;
+  }
+
+  try {
+    filterNextDataScript(script);
+  } catch (error) {
+    if (isExtensionContextInvalidatedError(error)) {
+      return;
+    }
+
+    if (error?.name === "SyntaxError") {
+      window.setTimeout(filterNextDataWhenAvailable, 25);
+      return;
+    }
+
+    console.warn("[Deadline Viewer] deadline widget filtering failed", error);
+  }
+}
+
+function filterNextDataScript(script) {
+  if (!script?.textContent || script.dataset.qdvDeadlineFiltering === "true") {
+    return;
+  }
+
+  script.dataset.qdvDeadlineFiltering = "true";
+
+  try {
+    const nextData = JSON.parse(script.textContent);
+    const course = nextData?.props?.pageProps?.course;
+    if (!course) {
+      script.dataset.qdvDeadlineFiltered = "true";
+      script.dataset.qdvDeadlineFilterSignature = getNextDataFilterSignature(script);
+      return;
+    }
+
+    const state = readCourseFollowStateMirror();
+    mergeFollowStateFromPageCourse(state, course);
+
+    if (Array.isArray(course.course_deadline_widget_data)) {
+      const originalDeadlines = course.course_deadline_widget_data;
+      const filteredDeadlines = originalDeadlines.filter((deadline) => {
+        return shouldShowDeadlineForFollowState(deadline, state);
+      });
+
+      if (filteredDeadlines.length !== originalDeadlines.length) {
+        course.course_deadline_widget_data = filteredDeadlines;
+        script.textContent = JSON.stringify(nextData);
+      }
+    }
+
+    writeCourseFollowStateMirror(state);
+    script.dataset.qdvDeadlineFiltered = "true";
+    script.dataset.qdvDeadlineFilterSignature = getNextDataFilterSignature(script);
+  } finally {
+    delete script.dataset.qdvDeadlineFiltering;
+  }
+}
+
+function getNextDataFilterSignature(script) {
+  const text = script?.textContent || "";
+  return `${window.location.pathname}${window.location.search}:${text.length}:${hashText(text)}`;
+}
+
+function hashText(value) {
+  let hash = 0;
+
+  for (let index = 0; index < value.length; index += 1) {
+    hash = ((hash << 5) - hash + value.charCodeAt(index)) | 0;
+  }
+
+  return String(hash);
+}
+
+function shouldShowDeadlineForFollowState(deadline, state) {
+  const assignmentId = String(deadline?.id || "");
+  const mappedCourseId = state.assignments[assignmentId]?.courseId;
+
+  if (mappedCourseId) {
+    return isCourseFollowedInState(state, mappedCourseId);
+  }
+
+  const courseName = normalizeText(deadline?.course_name || "");
+  if (!courseName) {
+    return true;
+  }
+
+  const matchingCourses = Object.values(state.courses).filter((course) => {
+    return normalizeText(course.name || "") === courseName;
+  });
+
+  if (!matchingCourses.length) {
+    return true;
+  }
+
+  return matchingCourses.some((course) => {
+    return isCourseFollowedInState(state, course.id);
+  });
+}
+
+function getNextDataCourse() {
+  const script = document.getElementById("__NEXT_DATA__");
+  if (!script?.textContent) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(script.textContent)?.props?.pageProps?.course || null;
+  } catch (error) {
+    console.warn("[Deadline Viewer] Next data parse failed", error);
+    return null;
+  }
 }
 
 function getCourseAssignments() {
@@ -1043,6 +1903,18 @@ async function showCourseDelays() {
   const courseId = getCourseId();
   if (!courseId) {
     return;
+  }
+
+  const nextCourse = getNextDataCourse();
+  if (nextCourse) {
+    persistFollowStateFromNextData({ props: { pageProps: { course: nextCourse } } })
+      .catch((error) => {
+        if (isExtensionContextInvalidatedError(error)) {
+          return;
+        }
+
+        console.warn("[Deadline Viewer] course follow state update failed", error);
+      });
   }
 
   const courseName = getCourseName();
@@ -1144,7 +2016,9 @@ function enqueueAssignmentDelayFetch(state, assignment, options = {}) {
 
   if (courseInFlight.has(cacheKey)) {
     courseInFlight.get(cacheKey).then((result) => {
-      applyAssignmentDelayResult(state, assignment, result);
+      runSafely(() => {
+        applyAssignmentDelayResult(state, assignment, result);
+      });
     });
     return;
   }
@@ -1222,7 +2096,9 @@ async function fetchQueuedAssignmentDelay(work) {
 
   const result = await courseInFlight.get(cacheKey);
   subscribers.forEach((subscriber) => {
-    applyAssignmentDelayResult(subscriber.state, subscriber.assignment, result);
+    runSafely(() => {
+      applyAssignmentDelayResult(subscriber.state, subscriber.assignment, result);
+    });
   });
 }
 
@@ -1448,6 +2324,255 @@ function removeExistingCourseUi() {
   document.querySelectorAll(".qdv-course-delay").forEach((element) => element.remove());
 }
 
+function removeExistingCourseFollowUi() {
+  runSafely(() => {
+    document.querySelectorAll(`.${COURSE_FOLLOW_BUTTON_CLASS}`).forEach((element) => {
+      element.remove();
+    });
+    document.querySelectorAll(`.${COURSE_FOLLOW_MENUITEM_CLASS}`).forEach((element) => {
+      element.remove();
+    });
+  });
+}
+
+function scheduleCourseFollowControls(delayMs = 100) {
+  if (courseFollowRenderTimer) {
+    clearTimeout(courseFollowRenderTimer);
+  }
+
+  courseFollowRenderTimer = setTimeout(() => {
+    runSafely(() => {
+      courseFollowRenderTimer = null;
+      renderCourseFollowControls().catch((error) => {
+        if (isExtensionContextInvalidatedError(error)) {
+          return;
+        }
+
+        console.warn("[Deadline Viewer] course follow controls failed", error);
+      });
+    });
+  }, delayMs);
+}
+
+function observeCourseFollowControls() {
+  if (courseFollowObserver || !document.body) {
+    return;
+  }
+
+  courseFollowObserver = new MutationObserver(() => {
+    runSafely(() => {
+      scheduleCourseFollowControls();
+    });
+  });
+
+  courseFollowObserver.observe(document.body, {
+    childList: true,
+    subtree: true
+  });
+}
+
+function stopCourseFollowObserver() {
+  if (courseFollowObserver) {
+    courseFollowObserver.disconnect();
+    courseFollowObserver = null;
+  }
+
+  if (courseFollowRenderTimer) {
+    clearTimeout(courseFollowRenderTimer);
+    courseFollowRenderTimer = null;
+  }
+}
+
+async function renderCourseFollowControls() {
+  if (!document.body) {
+    return;
+  }
+
+  injectStyles();
+
+  const nextCourse = getNextDataCourse();
+  if (nextCourse) {
+    await persistFollowStateFromNextData({ props: { pageProps: { course: nextCourse } } });
+  }
+
+  if (isCoursePage()) {
+    await renderCoursePageFollowButton();
+    return;
+  }
+
+  if (isCourseListPage()) {
+    await renderCourseListFollowMenuItem();
+  }
+}
+
+async function renderCoursePageFollowButton() {
+  const course = getCurrentCourseMetadata();
+  if (!course?.id) {
+    return;
+  }
+
+  const state = await readCourseFollowState();
+  const followed = isCourseFollowedInState(state, course.id);
+  let button = document.querySelector(`.${COURSE_FOLLOW_BUTTON_CLASS}`);
+
+  if (!button) {
+    button = document.createElement("button");
+    button.type = "button";
+    button.className = COURSE_FOLLOW_BUTTON_CLASS;
+    button.dir = "rtl";
+    button.addEventListener("click", async () => {
+      const latestState = await readCourseFollowState();
+      const latestFollowed = isCourseFollowedInState(latestState, course.id);
+      await setCourseFollowOverride(course, !latestFollowed);
+      await renderCoursePageFollowButton();
+    });
+
+    const container = findCourseFollowButtonContainer(course.name);
+    container?.appendChild(button);
+  }
+
+  updateCourseFollowButton(button, followed);
+}
+
+function updateCourseFollowButton(button, followed) {
+  button.textContent = getCourseFollowLabel(followed);
+  button.title = followed
+    ? "حذف ددلاین‌های این درس از ویجت مهلت‌ها"
+    : "نمایش ددلاین‌های این درس در ویجت مهلت‌ها";
+  button.classList.toggle("is-unfollowed", !followed);
+}
+
+function findCourseFollowButtonContainer(courseName) {
+  const headings = Array.from(document.querySelectorAll("h1, h2"));
+  const heading = headings.find((element) => {
+    return normalizeText(element.textContent || "") === normalizeText(courseName || "");
+  });
+
+  return (
+    heading?.closest(".chakra-stack")?.parentElement ||
+    heading?.parentElement ||
+    document.querySelector("main")
+  );
+}
+
+async function renderCourseListFollowMenuItem() {
+  const menu = document.querySelector('[role="menu"], .chakra-menu__menu-list');
+  const expandedButton = document.querySelector(
+    'button[aria-expanded="true"].chakra-menu__menu-button'
+  );
+
+  if (!menu || !expandedButton) {
+    document.querySelectorAll(`.${COURSE_FOLLOW_MENUITEM_CLASS}`).forEach((element) => {
+      element.remove();
+    });
+    return;
+  }
+
+  const course = getCourseMetadataFromCardMenuButton(expandedButton);
+  if (!course?.id) {
+    return;
+  }
+
+  const state = await readCourseFollowState();
+  const followed = isCourseFollowedInState(state, course.id);
+  let item = menu.querySelector(`.${COURSE_FOLLOW_MENUITEM_CLASS}`);
+
+  if (!item) {
+    item = document.createElement("button");
+    item.type = "button";
+    item.role = "menuitem";
+    item.className = COURSE_FOLLOW_MENUITEM_CLASS;
+    item.dir = "rtl";
+
+    menu.appendChild(item);
+  }
+
+  item.dataset.courseId = course.id;
+  item.textContent = getCourseFollowLabel(followed);
+  item.onclick = async (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const latestState = await readCourseFollowState();
+    const latestFollowed = isCourseFollowedInState(latestState, course.id);
+    await setCourseFollowOverride(course, !latestFollowed);
+    window.location.reload();
+  };
+}
+
+function getCurrentCourseMetadata() {
+  const nextCourse = getNextDataCourse();
+  const courseId = getCourseId() || nextCourse?.id;
+  const name = nextCourse?.name || getCourseName();
+
+  return normalizeCourseMetadata({
+    id: courseId,
+    name,
+    isArchived: nextCourse?.is_archived ?? nextCourse?.isArchived,
+    archivedBy: nextCourse?.archived_by || nextCourse?.archivedBy || null
+  });
+}
+
+function getCourseMetadataFromCardMenuButton(button) {
+  const card = findCourseCardContainer(button);
+  const link = card?.querySelector('a[href*="/course/"]');
+  const match = link?.href?.match(/\/course\/(\d+)\/?$/);
+  const courseId = match?.[1] || null;
+  const courseNode = findCourseNodeInNextData(courseId);
+
+  return normalizeCourseMetadata(
+    courseNode || {
+      id: courseId,
+      name: getCourseNameFromCardLink(link),
+      isArchived: isArchivedCourseListSelected()
+    }
+  );
+}
+
+function findCourseCardContainer(element) {
+  let current = element?.parentElement;
+
+  while (current && current !== document.body) {
+    if (current.querySelector?.('a[href*="/course/"]')) {
+      return current;
+    }
+
+    current = current.parentElement;
+  }
+
+  return null;
+}
+
+function getCourseNameFromCardLink(link) {
+  const paragraphs = Array.from(link?.querySelectorAll("p") || []);
+  const firstParagraph = normalizeText(paragraphs[0]?.textContent || "");
+
+  if (firstParagraph) {
+    return firstParagraph;
+  }
+
+  return normalizeText(link?.textContent || "");
+}
+
+function findCourseNodeInNextData(courseId) {
+  const id = String(courseId || "");
+  if (!id) {
+    return null;
+  }
+
+  const nextCourse = getNextDataCourse();
+  return (
+    nextCourse?.courses?.edges
+      ?.map((edge) => edge?.node)
+      .find((node) => String(node?.id || "") === id) || null
+  );
+}
+
+function isArchivedCourseListSelected() {
+  const selectedOption = document.querySelector("select option:checked");
+  return normalizeText(selectedOption?.textContent || "") === "آرشیو شده";
+}
+
 function stopCourseObserver() {
   if (courseObserver) {
     courseObserver.disconnect();
@@ -1468,11 +2593,25 @@ function scheduleCourseDelays(delayMs = 250) {
   }
 
   courseRenderTimer = setTimeout(() => {
-    courseRenderTimer = null;
-    showCourseDelays().catch((error) => {
-      console.warn("[Deadline Viewer] course delay render failed", error);
+    runSafely(() => {
+      courseRenderTimer = null;
+      showCourseDelays().catch((error) => {
+        if (isExtensionContextInvalidatedError(error)) {
+          return;
+        }
+
+        console.warn("[Deadline Viewer] course delay render failed", error);
+      });
     });
   }, delayMs);
+}
+
+function ensureCourseDelaysScheduled(delayMs = 250) {
+  if (courseRenderTimer) {
+    return;
+  }
+
+  scheduleCourseDelays(delayMs);
 }
 
 function observeCoursePage() {
@@ -1485,14 +2624,21 @@ function observeCoursePage() {
   // Quera renders course content asynchronously after route changes. Watch for
   // the assignment list to appear or change, then render once the cards exist.
   courseObserver = new MutationObserver(() => {
-    const signature = getCourseAssignmentSignature();
-    const hasAssignments = Boolean(signature);
-    const hasBadges = Boolean(document.querySelector(".qdv-course-delay"));
+    runSafely(() => {
+      const signature = getCourseAssignmentSignature();
+      const hasAssignments = Boolean(signature);
+      const hasBadges = Boolean(document.querySelector(".qdv-course-delay"));
 
-    if (signature !== lastCourseAssignmentSignature || (hasAssignments && !hasBadges)) {
-      lastCourseAssignmentSignature = signature;
-      scheduleCourseDelays();
-    }
+      if (signature !== lastCourseAssignmentSignature) {
+        lastCourseAssignmentSignature = signature;
+        scheduleCourseDelays();
+        return;
+      }
+
+      if (hasAssignments && !hasBadges) {
+        ensureCourseDelaysScheduled();
+      }
+    });
   });
 
   courseObserver.observe(document.body, {
@@ -1508,9 +2654,23 @@ function getCourseAssignmentSignature() {
 }
 
 function boot(force = false) {
+  filterNextDataWhenAvailable();
+
+  if (!document.body || !document.head) {
+    runWhenDocumentReady(() => boot(force));
+    return;
+  }
+
   const route = `${window.location.pathname}${window.location.search}`;
 
   if (!force && lastBootRoute === route) {
+    if (isCoursePage() && getCourseAssignments().length && !document.querySelector(".qdv-course-delay")) {
+      ensureCourseDelaysScheduled();
+    }
+
+    if (isCourseListPage() || isCoursePage()) {
+      scheduleCourseFollowControls();
+    }
     return;
   }
 
@@ -1519,13 +2679,30 @@ function boot(force = false) {
   if (isCoursePage()) {
     removeExistingUi();
     removeExistingCourseUi();
+    removeExistingCourseFollowUi();
     activeCourseRenderId += 1;
     observeCoursePage();
     scheduleCourseDelays();
+    ensureCourseDelaysScheduled(1200);
+    observeCourseFollowControls();
+    scheduleCourseFollowControls();
+    return;
+  }
+
+  if (isCourseListPage()) {
+    stopCourseObserver();
+    removeExistingUi();
+    removeExistingCourseUi();
+    removeExistingCourseFollowUi();
+    activeCourseRenderId += 1;
+    observeCourseFollowControls();
+    scheduleCourseFollowControls();
     return;
   }
 
   stopCourseObserver();
+  stopCourseFollowObserver();
+  removeExistingCourseFollowUi();
   removeExistingCourseUi();
   activeCourseRenderId += 1;
 
@@ -1539,7 +2716,9 @@ function boot(force = false) {
 
 function installRouteChangeWatcher() {
   const notifyRouteChange = () => {
-    window.setTimeout(() => boot(), 0);
+    window.setTimeout(() => {
+      runSafely(() => boot());
+    }, 0);
   };
 
   // The manifest injects on all Quera pages so SPA navigation can be detected.
@@ -1565,9 +2744,26 @@ function installRouteChangeWatcher() {
   window.addEventListener("popstate", notifyRouteChange);
 
   if (!routePollTimer) {
-    routePollTimer = window.setInterval(() => boot(), 1000);
+    routePollTimer = window.setInterval(() => {
+      runSafely(() => boot());
+    }, 1000);
   }
 }
 
+installPageDataResponseFilter();
 installRouteChangeWatcher();
-boot(true);
+installNextDataFilter();
+runWhenDocumentReady(() => {
+  runSafely(() => boot(true));
+});
+
+function runWhenDocumentReady(callback) {
+  if (document.body && document.head) {
+    callback();
+    return;
+  }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    runSafely(callback);
+  }, { once: true });
+}
