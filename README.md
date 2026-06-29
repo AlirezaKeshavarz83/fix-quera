@@ -17,6 +17,7 @@ Fix Quera is a browser extension that improves Quera course and assignment pages
 - Shows a compact calendar-check indicator on followed course-list cards.
 - Filters Quera's upcoming-deadline widget to show only followed courses.
 - Defaults active courses to followed and archived courses to unfollowed until the user chooses otherwise.
+- Removing extension/site data resets local follow choices, so courses return to the active/archived defaults.
 - Caches course-page delay results for 10 minutes.
 - Refreshes stale course delay data through a throttled queue of 1 request per second.
 - Handles Quera client-side navigation without requiring a manual page reload after the extension is already loaded.
@@ -56,10 +57,16 @@ Fix Quera asks for access to Quera pages so it can read and improve the deadline
 - `page-data-filter.js`
 The cached data stays in your browser. It is not sent to the developer or stored anywhere else by Fix Quera.
 
+## Compatibility
+
+The release package contains `manifest.json`, `content.js`, and `page-data-filter.js`. The page data filter runs in the page world with `world: "MAIN"` so it can filter Quera's Next.js data before the deadline widget renders.
+
+The current manifest has been accepted as a temporary add-on in Firefox 152.0.3. If a future Firefox version rejects `world: "MAIN"`, keep Chrome behavior intact and split Chrome/Firefox package generation instead of weakening the Chrome manifest.
+
 ## Development
 
 ```sh
-scripts/package-release.sh 0.4.1
+scripts/package-release.sh 0.4.2
 ```
 
 To develop locally, clone this repo and load it as an unpacked extension in Chrome (`chrome://extensions/` → Load unpacked) or a temporary add-on in Firefox (`about:debugging` → Load Temporary Add-on).
@@ -69,6 +76,7 @@ Useful local checks:
 ```sh
 node -e "JSON.parse(require('fs').readFileSync('manifest.json','utf8'))"
 node --check content.js
+node --check page-data-filter.js
 scripts/package-release.sh <version>
 ```
 

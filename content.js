@@ -1415,6 +1415,14 @@ function mergeCourseMetadataIntoState(state, courses) {
       lastSeenAt: previous.lastSeenAt || normalized.lastSeenAt
     };
 
+    if (typeof normalized.isArchived !== "boolean" && typeof previous.isArchived === "boolean") {
+      nextCourse.isArchived = previous.isArchived;
+    }
+
+    if (!normalized.archivedBy && previous.archivedBy) {
+      nextCourse.archivedBy = previous.archivedBy;
+    }
+
     const hasMeaningfulChange =
       !previous.id ||
       previous.name !== nextCourse.name ||
@@ -2366,13 +2374,14 @@ function getCourseMetadataFromCardLink(link) {
   const courseId = getCourseIdFromLink(link);
   const courseNode = findCourseNodeInNextData(courseId);
 
-  return normalizeCourseMetadata(
-    courseNode || {
-      id: courseId,
-      name: getCourseNameFromCardLink(link),
-      isArchived: isArchivedCourseListSelected()
-    }
-  );
+  if (courseNode) {
+    return normalizeCourseMetadata(courseNode);
+  }
+
+  return normalizeCourseMetadata({
+    id: courseId,
+    name: getCourseNameFromCardLink(link)
+  });
 }
 
 function getCourseMetadataFromCardMenuButton(button) {
@@ -2421,11 +2430,6 @@ function findCourseNodeInNextData(courseId) {
       ?.map((edge) => edge?.node)
       .find((node) => String(node?.id || "") === id) || null
   );
-}
-
-function isArchivedCourseListSelected() {
-  const selectedOption = document.querySelector("select option:checked");
-  return normalizeText(selectedOption?.textContent || "") === "آرشیو شده";
 }
 
 function stopCourseObserver() {
