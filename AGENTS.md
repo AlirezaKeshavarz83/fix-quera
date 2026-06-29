@@ -23,8 +23,14 @@ This repository contains a small WebExtension for improving Quera course and ass
   - Use `assignments[].pk` to lazily populate assignment ID to course ID mappings.
 - The course list UI has a status filter with values `all`, `active`, and `archived`. Active course nodes have `is_archived: false`; archived course nodes should be treated as unfollowed by default unless a local manual override exists.
 - Active course-card menus were observed with a Chakra menu button and an `آرشیو برای من` menu item. Add extension menu items next to that menu item without calling Quera archive APIs.
+- Chakra leaves hidden menu portals in the DOM. When adding course-card menu items, anchor the insertion to the expanded card button's `aria-controls` menu instead of using the first `[role="menu"]` on the page.
 - Course follow state is canonical in extension storage. The isolated `content.js` keeps a same-device Quera-page storage mirror in sync so `page-data-filter.js` can synchronously filter `course_deadline_widget_data` in Quera's page world.
 - Deadline data filtering ownership is split deliberately: `page-data-filter.js` filters `#__NEXT_DATA__` and page-world `fetch`/`XMLHttpRequest` JSON responses; `content.js` must not inject inline page scripts or patch page-world networking.
+
+## Compatibility Findings
+
+- `dist/fix-quera-0.4.0.zip` was verified with `unzip -t` and contains exactly `manifest.json`, `content.js`, and `page-data-filter.js`.
+- Firefox 152.0.3 accepted the repo manifest as a temporary add-on with `world: "MAIN"` on the `page-data-filter.js` content script. Do not remove `world: "MAIN"` for compatibility unless Firefox rejects it in a real temporary-add-on test; if that happens, split Chrome/Firefox manifest generation instead.
 
 ## Local Files
 
@@ -40,7 +46,7 @@ This repository contains a small WebExtension for improving Quera course and ass
 node -e "JSON.parse(require('fs').readFileSync('manifest.json','utf8'))"
 node --check content.js
 node --check page-data-filter.js
-scripts/package-release.sh 0.4.1
+scripts/package-release.sh 0.4.2
 ```
 
 - Inspect generated zips before uploading a release. They should contain only `manifest.json`, `content.js`, and `page-data-filter.js`.

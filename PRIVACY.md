@@ -14,4 +14,6 @@ fix-quera does not use analytics, tracking, remote code, cookies, background ser
 
 Users can remove the locally stored cache by clearing the extension's site/extension data or uninstalling the extension.
 
+Removing extension/site data also removes local course follow choices and the page-storage mirror. After that reset, active courses are treated as followed and archived courses are treated as unfollowed again until the user manually toggles a course.
+
 Contact: alirezakeshavarzhedayati@gmail.com

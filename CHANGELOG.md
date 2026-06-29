@@ -2,6 +2,12 @@
 
 All notable changes to fix-quera are documented in this file.
 
+## v0.4.2 - 2026-06-29
+
+- Verified the v0.4.0 Chrome release zip contents and compressed data.
+- Verified Firefox 152.0.3 accepts the current temporary add-on manifest with `world: "MAIN"`.
+- Documented compatibility checks and local follow-state default/reset behavior.
+
 ## v0.4.1 - 2026-06-29
 
 - Added a compact calendar-check indicator on followed Quera course-list cards.
