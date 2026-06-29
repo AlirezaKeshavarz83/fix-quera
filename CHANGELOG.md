@@ -2,6 +2,11 @@
 
 All notable changes to fix-quera are documented in this file.
 
+## v0.4.1 - 2026-06-29
+
+- Added a compact calendar-check indicator on followed Quera course-list cards.
+- Kept course follow/unfollow actions in each course card's three-dot menu.
+
 ## v0.4.0 - 2026-06-29
 
 - Added local follow/unfollow controls for Quera courses.
