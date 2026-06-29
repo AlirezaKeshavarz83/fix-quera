@@ -4,6 +4,10 @@ const TOOLTIP_ID = "deadline-viewer-tooltip";
 const TEHRAN_TIME_ZONE = "Asia/Tehran";
 const COURSE_TOTAL_ID = "deadline-viewer-course-total";
 const COURSE_CACHE_PREFIX = "qdv-course-delay";
+const COURSE_FOLLOW_STATE_KEY = "qdv-course-follow-state:v1";
+const COURSE_FOLLOW_STATE_MIRROR_KEY = "qdv-course-follow-state-mirror:v1";
+const COURSE_FOLLOW_BUTTON_CLASS = "qdv-course-follow-button";
+const COURSE_FOLLOW_MENUITEM_CLASS = "qdv-course-follow-menuitem";
 const COURSE_CACHE_TTL_MS = 10 * 60 * 1000;
 const COURSE_QUEUE_BATCH_SIZE = 1;
 const COURSE_QUEUE_DELAY_MS = 1000;
@@ -28,6 +32,10 @@ let lastCourseAssignmentSignature = "";
 let lastBootRoute = "";
 let routePollTimer = null;
 let activeCourseRenderId = 0;
+let courseFollowStateCache = null;
+let courseFollowStateReady = null;
+let courseFollowObserver = null;
+let courseFollowRenderTimer = null;
 
 function extractDeadlineData() {
   const data = {
@@ -269,6 +277,10 @@ function createDetailItem(detail) {
 }
 
 function injectStyles() {
+  if (!document.head) {
+    return;
+  }
+
   if (document.getElementById(STYLE_ID)) {
     return;
   }
@@ -591,6 +603,72 @@ function injectStyles() {
       color: #feb2b2;
       background: rgba(254, 178, 178, 0.12);
       border-color: rgba(254, 178, 178, 0.18);
+    }
+
+    .${COURSE_FOLLOW_BUTTON_CLASS} {
+      --qdv-primary: var(--colors-primary, #0076a6);
+      --qdv-primary-soft: var(--colors-primary-hover-opaque, rgba(0, 168, 214, 0.07));
+      --qdv-text: var(--chakra-colors-text-normal, #1a202c);
+      --qdv-border: var(--colors-border, var(--chakra-colors-border-gray, #e2e8f0));
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: fit-content;
+      min-height: 32px;
+      margin-top: 10px;
+      padding: 6px 12px;
+      color: var(--qdv-primary);
+      background: var(--qdv-primary-soft);
+      border: 1px solid transparent;
+      border-radius: 6px;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.5;
+      white-space: nowrap;
+    }
+
+    .${COURSE_FOLLOW_BUTTON_CLASS}:hover,
+    .${COURSE_FOLLOW_BUTTON_CLASS}:focus {
+      border-color: var(--qdv-primary);
+      outline: none;
+    }
+
+    .${COURSE_FOLLOW_BUTTON_CLASS}.is-unfollowed {
+      color: var(--chakra-colors-text-pale, #718096);
+      background: transparent;
+      border-color: var(--qdv-border);
+    }
+
+    .${COURSE_FOLLOW_MENUITEM_CLASS} {
+      display: flex;
+      align-items: center;
+      width: 100%;
+      min-height: 32px;
+      padding: 6px 12px;
+      color: inherit;
+      background: transparent;
+      border: 0;
+      cursor: pointer;
+      font: inherit;
+      text-align: right;
+      direction: rtl;
+    }
+
+    .${COURSE_FOLLOW_MENUITEM_CLASS}:hover,
+    .${COURSE_FOLLOW_MENUITEM_CLASS}:focus {
+      background: var(--chakra-colors-blackAlpha-100, rgba(0, 0, 0, 0.06));
+      outline: none;
+    }
+
+    html[data-theme="dark"] .${COURSE_FOLLOW_BUTTON_CLASS},
+    [data-theme="dark"] .${COURSE_FOLLOW_BUTTON_CLASS},
+    body.chakra-ui-dark .${COURSE_FOLLOW_BUTTON_CLASS} {
+      --qdv-primary: #91def3;
+      --qdv-primary-soft: rgba(145, 222, 243, 0.12);
+      --qdv-text: #edf2f7;
+      --qdv-border: #2d3748;
     }
   `;
 
@@ -949,6 +1027,10 @@ function isCoursePage() {
   return /^\/course\/\d+\/?$/.test(window.location.pathname);
 }
 
+function isCourseListPage() {
+  return /^\/course\/?$/.test(window.location.pathname);
+}
+
 function getExtensionStorage() {
   const api = globalThis.browser?.storage?.local || globalThis.chrome?.storage?.local;
 
@@ -991,12 +1073,339 @@ function storageSet(values) {
   });
 }
 
+function installCourseFollowStateStorageListener() {
+  const onChanged =
+    globalThis.browser?.storage?.onChanged ||
+    globalThis.chrome?.storage?.onChanged;
+
+  if (!onChanged?.addListener) {
+    return;
+  }
+
+  onChanged.addListener((changes, areaName) => {
+    if (areaName && areaName !== "local") {
+      return;
+    }
+
+    const change = changes?.[COURSE_FOLLOW_STATE_KEY];
+    if (!change) {
+      return;
+    }
+
+    const nextState = normalizeCourseFollowState(change.newValue);
+    courseFollowStateCache = nextState;
+    courseFollowStateReady = Promise.resolve(courseFollowStateCache);
+    writeCourseFollowStateMirror(nextState);
+
+    if (isCourseListPage() || isCoursePage()) {
+      scheduleCourseFollowControls();
+    }
+  });
+}
+
+function isExtensionContextInvalidatedError(error) {
+  return String(error?.message || error).includes("Extension context invalidated");
+}
+
+function runSafely(callback, warning) {
+  try {
+    return callback();
+  } catch (error) {
+    if (isExtensionContextInvalidatedError(error)) {
+      return undefined;
+    }
+
+    if (warning) {
+      console.warn(warning, error);
+    }
+
+    throw error;
+  }
+}
+
+function createEmptyCourseFollowState() {
+  return {
+    version: 1,
+    courses: {},
+    assignments: {},
+    overrides: {}
+  };
+}
+
+function normalizeCourseFollowState(value) {
+  const state = createEmptyCourseFollowState();
+
+  if (!value || typeof value !== "object") {
+    return state;
+  }
+
+  state.courses = value.courses && typeof value.courses === "object"
+    ? { ...value.courses }
+    : {};
+  state.assignments = value.assignments && typeof value.assignments === "object"
+    ? { ...value.assignments }
+    : {};
+  state.overrides = value.overrides && typeof value.overrides === "object"
+    ? { ...value.overrides }
+    : {};
+
+  return state;
+}
+
+async function readCourseFollowState() {
+  if (courseFollowStateCache) {
+    return cloneCourseFollowState(courseFollowStateCache);
+  }
+
+  return readCourseFollowStateFromStorage();
+}
+
+async function readCourseFollowStateFromStorage() {
+  if (!courseFollowStateReady) {
+    courseFollowStateReady = storageGet(COURSE_FOLLOW_STATE_KEY)
+      .then((values) => {
+        courseFollowStateCache = normalizeCourseFollowState(
+          values?.[COURSE_FOLLOW_STATE_KEY]
+        );
+        writeCourseFollowStateMirror(courseFollowStateCache);
+        return courseFollowStateCache;
+      })
+      .catch((error) => {
+        if (isExtensionContextInvalidatedError(error)) {
+          return createEmptyCourseFollowState();
+        }
+
+        console.warn("[Deadline Viewer] course follow state read failed", error);
+        courseFollowStateCache = createEmptyCourseFollowState();
+        return courseFollowStateCache;
+      });
+  }
+
+  await courseFollowStateReady;
+  return cloneCourseFollowState(courseFollowStateCache);
+}
+
+function primeCourseFollowStateMirror() {
+  readCourseFollowState().catch((error) => {
+    if (isExtensionContextInvalidatedError(error)) {
+      return;
+    }
+
+    console.warn("[Deadline Viewer] course follow state mirror prime failed", error);
+  });
+}
+
+function cloneCourseFollowState(state) {
+  return {
+    version: 1,
+    courses: { ...(state?.courses || {}) },
+    assignments: { ...(state?.assignments || {}) },
+    overrides: { ...(state?.overrides || {}) }
+  };
+}
+
+function writeCourseFollowStateMirror(state) {
+  try {
+    window.localStorage.setItem(
+      COURSE_FOLLOW_STATE_MIRROR_KEY,
+      JSON.stringify(normalizeCourseFollowState(state))
+    );
+  } catch {
+    // The extension storage copy remains authoritative if page storage is unavailable.
+  }
+}
+
+async function writeCourseFollowState(state) {
+  const normalized = normalizeCourseFollowState(state);
+  courseFollowStateCache = normalized;
+  courseFollowStateReady = Promise.resolve(courseFollowStateCache);
+  writeCourseFollowStateMirror(normalized);
+  await storageSet({ [COURSE_FOLLOW_STATE_KEY]: normalized });
+}
+
+async function updateCourseFollowState(mutator) {
+  courseFollowStateReady = null;
+  const state = await readCourseFollowStateFromStorage();
+  const mutatedState = mutator(state);
+  if (mutatedState === false) {
+    return state;
+  }
+
+  const nextState = mutatedState || state;
+  await writeCourseFollowState(nextState);
+  return nextState;
+}
+
+function isCourseFollowedInState(state, courseId) {
+  const id = String(courseId || "");
+
+  if (!id) {
+    return true;
+  }
+
+  if (typeof state.overrides[id] === "boolean") {
+    return state.overrides[id];
+  }
+
+  const course = state.courses[id];
+  if (course && typeof course.isArchived === "boolean") {
+    return !course.isArchived;
+  }
+
+  return true;
+}
+
+function getCourseFollowLabel(followed) {
+  return followed ? "دنبال نکردن درس" : "دنبال کردن درس";
+}
+
+async function setCourseFollowOverride(course, followed) {
+  const courseInfo = normalizeCourseMetadata(course);
+  const courseId = courseInfo?.id;
+
+  if (!courseId) {
+    return null;
+  }
+
+  return updateCourseFollowState((state) => {
+    mergeCourseMetadataIntoState(state, [courseInfo]);
+    state.overrides[courseId] = Boolean(followed);
+    return state;
+  });
+}
+
+function normalizeCourseMetadata(course) {
+  if (!course || typeof course !== "object") {
+    return null;
+  }
+
+  const id = String(course.id || course.pk || course.courseId || "");
+  if (!id) {
+    return null;
+  }
+
+  const name = normalizeText(course.name || course.courseName || "");
+  const archivedValue = course.is_archived ?? course.isArchived;
+  const archivedBy = course.archived_by ?? course.archivedBy ?? null;
+  const metadata = {
+    id,
+    name,
+    archivedBy,
+    lastSeenAt: Date.now()
+  };
+
+  if (typeof archivedValue === "boolean") {
+    metadata.isArchived = archivedValue;
+  }
+
+  return metadata;
+}
+
+function mergeCourseMetadataIntoState(state, courses) {
+  let changed = false;
+
+  courses.forEach((course) => {
+    const normalized = normalizeCourseMetadata(course);
+    if (!normalized) {
+      return;
+    }
+
+    const previous = state.courses[normalized.id] || {};
+    const nextCourse = {
+      ...previous,
+      ...normalized,
+      name: normalized.name || previous.name || normalized.id,
+      lastSeenAt: previous.lastSeenAt || normalized.lastSeenAt
+    };
+
+    const hasMeaningfulChange =
+      !previous.id ||
+      previous.name !== nextCourse.name ||
+      previous.isArchived !== nextCourse.isArchived ||
+      previous.archivedBy !== nextCourse.archivedBy;
+
+    if (hasMeaningfulChange) {
+      nextCourse.lastSeenAt = normalized.lastSeenAt;
+      state.courses[normalized.id] = nextCourse;
+      changed = true;
+    }
+  });
+
+  return changed;
+}
+
+function mergeAssignmentMappingsIntoState(state, course, assignments) {
+  const normalizedCourse = normalizeCourseMetadata(course);
+  if (!normalizedCourse || !Array.isArray(assignments)) {
+    return false;
+  }
+
+  let changed = mergeCourseMetadataIntoState(state, [normalizedCourse]);
+
+  assignments.forEach((assignment) => {
+    const assignmentId = String(assignment?.pk || assignment?.id || "");
+    if (!assignmentId) {
+      return;
+    }
+
+    const previous = state.assignments[assignmentId] || {};
+    const nextAssignment = {
+      ...previous,
+      assignmentId,
+      courseId: normalizedCourse.id,
+      courseName: normalizedCourse.name,
+      assignmentName: normalizeText(assignment.name || ""),
+      lastSeenAt: previous.lastSeenAt || Date.now()
+    };
+
+    const hasMeaningfulChange =
+      !previous.assignmentId ||
+      previous.courseId !== nextAssignment.courseId ||
+      previous.courseName !== nextAssignment.courseName ||
+      previous.assignmentName !== nextAssignment.assignmentName;
+
+    if (hasMeaningfulChange) {
+      nextAssignment.lastSeenAt = Date.now();
+      state.assignments[assignmentId] = nextAssignment;
+      changed = true;
+    }
+  });
+
+  return changed;
+}
+
+async function persistFollowStateFromNextData(nextData) {
+  const course = nextData?.props?.pageProps?.course;
+  if (!course) {
+    return;
+  }
+
+  await updateCourseFollowState((state) => {
+    return mergeFollowStateFromPageCourse(state, course) ? state : false;
+  });
+}
+
+function mergeFollowStateFromPageCourse(state, course) {
+  let changed = false;
+
+  const courseNodes = course.courses?.edges
+    ?.map((edge) => edge?.node)
+    .filter(Boolean) || [];
+  changed = mergeCourseMetadataIntoState(state, courseNodes) || changed;
+
+  if (course.id && course.name) {
+    changed = mergeAssignmentMappingsIntoState(state, course, course.assignments) || changed;
+  }
+
+  return changed;
+}
+
 function getCourseId() {
   return window.location.pathname.match(/^\/course\/(\d+)\/?$/)?.[1] || null;
 }
 
 function getCourseName() {
-  const heading = document.querySelector("h1");
+  const heading = document.querySelector("h1, h2");
   const headingText = normalizeText(heading?.textContent || "");
 
   if (headingText) {
@@ -1008,6 +1417,20 @@ function getCourseName() {
 
 function normalizeText(value) {
   return value.replace(/\s+/g, " ").trim();
+}
+
+function getNextDataCourse() {
+  const script = document.getElementById("__NEXT_DATA__");
+  if (!script?.textContent) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(script.textContent)?.props?.pageProps?.course || null;
+  } catch (error) {
+    console.warn("[Deadline Viewer] Next data parse failed", error);
+    return null;
+  }
 }
 
 function getCourseAssignments() {
@@ -1043,6 +1466,18 @@ async function showCourseDelays() {
   const courseId = getCourseId();
   if (!courseId) {
     return;
+  }
+
+  const nextCourse = getNextDataCourse();
+  if (nextCourse) {
+    persistFollowStateFromNextData({ props: { pageProps: { course: nextCourse } } })
+      .catch((error) => {
+        if (isExtensionContextInvalidatedError(error)) {
+          return;
+        }
+
+        console.warn("[Deadline Viewer] course follow state update failed", error);
+      });
   }
 
   const courseName = getCourseName();
@@ -1144,7 +1579,9 @@ function enqueueAssignmentDelayFetch(state, assignment, options = {}) {
 
   if (courseInFlight.has(cacheKey)) {
     courseInFlight.get(cacheKey).then((result) => {
-      applyAssignmentDelayResult(state, assignment, result);
+      runSafely(() => {
+        applyAssignmentDelayResult(state, assignment, result);
+      });
     });
     return;
   }
@@ -1222,7 +1659,9 @@ async function fetchQueuedAssignmentDelay(work) {
 
   const result = await courseInFlight.get(cacheKey);
   subscribers.forEach((subscriber) => {
-    applyAssignmentDelayResult(subscriber.state, subscriber.assignment, result);
+    runSafely(() => {
+      applyAssignmentDelayResult(subscriber.state, subscriber.assignment, result);
+    });
   });
 }
 
@@ -1448,6 +1887,255 @@ function removeExistingCourseUi() {
   document.querySelectorAll(".qdv-course-delay").forEach((element) => element.remove());
 }
 
+function removeExistingCourseFollowUi() {
+  runSafely(() => {
+    document.querySelectorAll(`.${COURSE_FOLLOW_BUTTON_CLASS}`).forEach((element) => {
+      element.remove();
+    });
+    document.querySelectorAll(`.${COURSE_FOLLOW_MENUITEM_CLASS}`).forEach((element) => {
+      element.remove();
+    });
+  });
+}
+
+function scheduleCourseFollowControls(delayMs = 100) {
+  if (courseFollowRenderTimer) {
+    clearTimeout(courseFollowRenderTimer);
+  }
+
+  courseFollowRenderTimer = setTimeout(() => {
+    runSafely(() => {
+      courseFollowRenderTimer = null;
+      renderCourseFollowControls().catch((error) => {
+        if (isExtensionContextInvalidatedError(error)) {
+          return;
+        }
+
+        console.warn("[Deadline Viewer] course follow controls failed", error);
+      });
+    });
+  }, delayMs);
+}
+
+function observeCourseFollowControls() {
+  if (courseFollowObserver || !document.body) {
+    return;
+  }
+
+  courseFollowObserver = new MutationObserver(() => {
+    runSafely(() => {
+      scheduleCourseFollowControls();
+    });
+  });
+
+  courseFollowObserver.observe(document.body, {
+    childList: true,
+    subtree: true
+  });
+}
+
+function stopCourseFollowObserver() {
+  if (courseFollowObserver) {
+    courseFollowObserver.disconnect();
+    courseFollowObserver = null;
+  }
+
+  if (courseFollowRenderTimer) {
+    clearTimeout(courseFollowRenderTimer);
+    courseFollowRenderTimer = null;
+  }
+}
+
+async function renderCourseFollowControls() {
+  if (!document.body) {
+    return;
+  }
+
+  injectStyles();
+
+  const nextCourse = getNextDataCourse();
+  if (nextCourse) {
+    await persistFollowStateFromNextData({ props: { pageProps: { course: nextCourse } } });
+  }
+
+  if (isCoursePage()) {
+    await renderCoursePageFollowButton();
+    return;
+  }
+
+  if (isCourseListPage()) {
+    await renderCourseListFollowMenuItem();
+  }
+}
+
+async function renderCoursePageFollowButton() {
+  const course = getCurrentCourseMetadata();
+  if (!course?.id) {
+    return;
+  }
+
+  const state = await readCourseFollowState();
+  const followed = isCourseFollowedInState(state, course.id);
+  let button = document.querySelector(`.${COURSE_FOLLOW_BUTTON_CLASS}`);
+
+  if (!button) {
+    button = document.createElement("button");
+    button.type = "button";
+    button.className = COURSE_FOLLOW_BUTTON_CLASS;
+    button.dir = "rtl";
+    button.addEventListener("click", async () => {
+      const latestState = await readCourseFollowState();
+      const latestFollowed = isCourseFollowedInState(latestState, course.id);
+      await setCourseFollowOverride(course, !latestFollowed);
+      await renderCoursePageFollowButton();
+    });
+
+    const container = findCourseFollowButtonContainer(course.name);
+    container?.appendChild(button);
+  }
+
+  updateCourseFollowButton(button, followed);
+}
+
+function updateCourseFollowButton(button, followed) {
+  button.textContent = getCourseFollowLabel(followed);
+  button.title = followed
+    ? "حذف ددلاین‌های این درس از ویجت مهلت‌ها"
+    : "نمایش ددلاین‌های این درس در ویجت مهلت‌ها";
+  button.classList.toggle("is-unfollowed", !followed);
+}
+
+function findCourseFollowButtonContainer(courseName) {
+  const headings = Array.from(document.querySelectorAll("h1, h2"));
+  const heading = headings.find((element) => {
+    return normalizeText(element.textContent || "") === normalizeText(courseName || "");
+  });
+
+  return (
+    heading?.closest(".chakra-stack")?.parentElement ||
+    heading?.parentElement ||
+    document.querySelector("main")
+  );
+}
+
+async function renderCourseListFollowMenuItem() {
+  const menu = document.querySelector('[role="menu"], .chakra-menu__menu-list');
+  const expandedButton = document.querySelector(
+    'button[aria-expanded="true"].chakra-menu__menu-button'
+  );
+
+  if (!menu || !expandedButton) {
+    document.querySelectorAll(`.${COURSE_FOLLOW_MENUITEM_CLASS}`).forEach((element) => {
+      element.remove();
+    });
+    return;
+  }
+
+  const course = getCourseMetadataFromCardMenuButton(expandedButton);
+  if (!course?.id) {
+    return;
+  }
+
+  const state = await readCourseFollowState();
+  const followed = isCourseFollowedInState(state, course.id);
+  let item = menu.querySelector(`.${COURSE_FOLLOW_MENUITEM_CLASS}`);
+
+  if (!item) {
+    item = document.createElement("button");
+    item.type = "button";
+    item.role = "menuitem";
+    item.className = COURSE_FOLLOW_MENUITEM_CLASS;
+    item.dir = "rtl";
+
+    menu.appendChild(item);
+  }
+
+  item.dataset.courseId = course.id;
+  item.textContent = getCourseFollowLabel(followed);
+  item.onclick = async (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const latestState = await readCourseFollowState();
+    const latestFollowed = isCourseFollowedInState(latestState, course.id);
+    await setCourseFollowOverride(course, !latestFollowed);
+    window.location.reload();
+  };
+}
+
+function getCurrentCourseMetadata() {
+  const nextCourse = getNextDataCourse();
+  const courseId = getCourseId() || nextCourse?.id;
+  const name = nextCourse?.name || getCourseName();
+
+  return normalizeCourseMetadata({
+    id: courseId,
+    name,
+    isArchived: nextCourse?.is_archived ?? nextCourse?.isArchived,
+    archivedBy: nextCourse?.archived_by || nextCourse?.archivedBy || null
+  });
+}
+
+function getCourseMetadataFromCardMenuButton(button) {
+  const card = findCourseCardContainer(button);
+  const link = card?.querySelector('a[href*="/course/"]');
+  const match = link?.href?.match(/\/course\/(\d+)\/?$/);
+  const courseId = match?.[1] || null;
+  const courseNode = findCourseNodeInNextData(courseId);
+
+  return normalizeCourseMetadata(
+    courseNode || {
+      id: courseId,
+      name: getCourseNameFromCardLink(link),
+      isArchived: isArchivedCourseListSelected()
+    }
+  );
+}
+
+function findCourseCardContainer(element) {
+  let current = element?.parentElement;
+
+  while (current && current !== document.body) {
+    if (current.querySelector?.('a[href*="/course/"]')) {
+      return current;
+    }
+
+    current = current.parentElement;
+  }
+
+  return null;
+}
+
+function getCourseNameFromCardLink(link) {
+  const paragraphs = Array.from(link?.querySelectorAll("p") || []);
+  const firstParagraph = normalizeText(paragraphs[0]?.textContent || "");
+
+  if (firstParagraph) {
+    return firstParagraph;
+  }
+
+  return normalizeText(link?.textContent || "");
+}
+
+function findCourseNodeInNextData(courseId) {
+  const id = String(courseId || "");
+  if (!id) {
+    return null;
+  }
+
+  const nextCourse = getNextDataCourse();
+  return (
+    nextCourse?.courses?.edges
+      ?.map((edge) => edge?.node)
+      .find((node) => String(node?.id || "") === id) || null
+  );
+}
+
+function isArchivedCourseListSelected() {
+  const selectedOption = document.querySelector("select option:checked");
+  return normalizeText(selectedOption?.textContent || "") === "آرشیو شده";
+}
+
 function stopCourseObserver() {
   if (courseObserver) {
     courseObserver.disconnect();
@@ -1468,11 +2156,25 @@ function scheduleCourseDelays(delayMs = 250) {
   }
 
   courseRenderTimer = setTimeout(() => {
-    courseRenderTimer = null;
-    showCourseDelays().catch((error) => {
-      console.warn("[Deadline Viewer] course delay render failed", error);
+    runSafely(() => {
+      courseRenderTimer = null;
+      showCourseDelays().catch((error) => {
+        if (isExtensionContextInvalidatedError(error)) {
+          return;
+        }
+
+        console.warn("[Deadline Viewer] course delay render failed", error);
+      });
     });
   }, delayMs);
+}
+
+function ensureCourseDelaysScheduled(delayMs = 250) {
+  if (courseRenderTimer) {
+    return;
+  }
+
+  scheduleCourseDelays(delayMs);
 }
 
 function observeCoursePage() {
@@ -1485,14 +2187,21 @@ function observeCoursePage() {
   // Quera renders course content asynchronously after route changes. Watch for
   // the assignment list to appear or change, then render once the cards exist.
   courseObserver = new MutationObserver(() => {
-    const signature = getCourseAssignmentSignature();
-    const hasAssignments = Boolean(signature);
-    const hasBadges = Boolean(document.querySelector(".qdv-course-delay"));
+    runSafely(() => {
+      const signature = getCourseAssignmentSignature();
+      const hasAssignments = Boolean(signature);
+      const hasBadges = Boolean(document.querySelector(".qdv-course-delay"));
 
-    if (signature !== lastCourseAssignmentSignature || (hasAssignments && !hasBadges)) {
-      lastCourseAssignmentSignature = signature;
-      scheduleCourseDelays();
-    }
+      if (signature !== lastCourseAssignmentSignature) {
+        lastCourseAssignmentSignature = signature;
+        scheduleCourseDelays();
+        return;
+      }
+
+      if (hasAssignments && !hasBadges) {
+        ensureCourseDelaysScheduled();
+      }
+    });
   });
 
   courseObserver.observe(document.body, {
@@ -1508,9 +2217,21 @@ function getCourseAssignmentSignature() {
 }
 
 function boot(force = false) {
+  if (!document.body || !document.head) {
+    runWhenDocumentReady(() => boot(force));
+    return;
+  }
+
   const route = `${window.location.pathname}${window.location.search}`;
 
   if (!force && lastBootRoute === route) {
+    if (isCoursePage() && getCourseAssignments().length && !document.querySelector(".qdv-course-delay")) {
+      ensureCourseDelaysScheduled();
+    }
+
+    if (isCourseListPage() || isCoursePage()) {
+      scheduleCourseFollowControls();
+    }
     return;
   }
 
@@ -1519,13 +2240,30 @@ function boot(force = false) {
   if (isCoursePage()) {
     removeExistingUi();
     removeExistingCourseUi();
+    removeExistingCourseFollowUi();
     activeCourseRenderId += 1;
     observeCoursePage();
     scheduleCourseDelays();
+    ensureCourseDelaysScheduled(1200);
+    observeCourseFollowControls();
+    scheduleCourseFollowControls();
+    return;
+  }
+
+  if (isCourseListPage()) {
+    stopCourseObserver();
+    removeExistingUi();
+    removeExistingCourseUi();
+    removeExistingCourseFollowUi();
+    activeCourseRenderId += 1;
+    observeCourseFollowControls();
+    scheduleCourseFollowControls();
     return;
   }
 
   stopCourseObserver();
+  stopCourseFollowObserver();
+  removeExistingCourseFollowUi();
   removeExistingCourseUi();
   activeCourseRenderId += 1;
 
@@ -1539,7 +2277,9 @@ function boot(force = false) {
 
 function installRouteChangeWatcher() {
   const notifyRouteChange = () => {
-    window.setTimeout(() => boot(), 0);
+    window.setTimeout(() => {
+      runSafely(() => boot());
+    }, 0);
   };
 
   // The manifest injects on all Quera pages so SPA navigation can be detected.
@@ -1565,9 +2305,26 @@ function installRouteChangeWatcher() {
   window.addEventListener("popstate", notifyRouteChange);
 
   if (!routePollTimer) {
-    routePollTimer = window.setInterval(() => boot(), 1000);
+    routePollTimer = window.setInterval(() => {
+      runSafely(() => boot());
+    }, 1000);
   }
 }
 
+installCourseFollowStateStorageListener();
+primeCourseFollowStateMirror();
 installRouteChangeWatcher();
-boot(true);
+runWhenDocumentReady(() => {
+  runSafely(() => boot(true));
+});
+
+function runWhenDocumentReady(callback) {
+  if (document.body && document.head) {
+    callback();
+    return;
+  }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    runSafely(callback);
+  }, { once: true });
+}

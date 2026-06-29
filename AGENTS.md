@@ -4,9 +4,27 @@ This repository contains a small WebExtension for improving Quera course and ass
 
 ## Project Shape
 
-- Treat `content.js` as the extension entrypoint.
+- Treat `content.js` as the isolated extension entrypoint for UI, extension storage, course metadata collection, assignment mapping, and delay tags.
+- Treat `page-data-filter.js` as the page-world data-filter entrypoint. It must not touch extension storage APIs, buttons, menus, delay tags, or DOM outside `#__NEXT_DATA__`.
 - Keep route-specific behavior gated by the current Quera URL. The manifest intentionally injects on `https://quera.org/*` so client-side navigation can be detected, but expensive work should stay limited to course and assignment pages.
 - Keep `manifest.json` permissions aligned with the real behavior of the extension. If storage, host access, or data handling changes, update `PRIVACY.md`, `README.md`, and store-review text together.
+
+## Quera Page Data Findings
+
+- Use Chrome/browser inspection against real Quera pages before changing route-specific behavior. Quera is a Next/React app and page shape can change; do not infer data contracts from memory alone.
+- The course list page (`/course`) exposes its initial page data in `#__NEXT_DATA__`.
+  - Upcoming deadlines are at `props.pageProps.course.course_deadline_widget_data`.
+  - Deadline entries observed there include assignment `id`, assignment `name`, `finish_time`, `course_name`, and `problems`, but not a course ID.
+  - Course cards are backed by `props.pageProps.course.courses.edges[].node`.
+  - Course nodes observed there include `id`, `name`, `is_archived`, `archived_by`, `user_count`, `assignment_count`, `lecture_count`, `term`, `school`, and `instructor_name`.
+- Course detail pages (`/course/{id}`) expose their initial page data in `#__NEXT_DATA__` at `props.pageProps.course`.
+  - The course object includes `id`, `name`, `assignments`, `lectures`, `current_pao`, and other course detail fields.
+  - Assignment entries observed there include `pk`, `name`, `start_time`, `finish_time`, `problem_count`, and `state`.
+  - Use `assignments[].pk` to lazily populate assignment ID to course ID mappings.
+- The course list UI has a status filter with values `all`, `active`, and `archived`. Active course nodes have `is_archived: false`; archived course nodes should be treated as unfollowed by default unless a local manual override exists.
+- Active course-card menus were observed with a Chakra menu button and an `آرشیو برای من` menu item. Add extension menu items next to that menu item without calling Quera archive APIs.
+- Course follow state is canonical in extension storage. The isolated `content.js` keeps a same-device Quera-page storage mirror in sync so `page-data-filter.js` can synchronously filter `course_deadline_widget_data` in Quera's page world.
+- Deadline data filtering ownership is split deliberately: `page-data-filter.js` filters `#__NEXT_DATA__` and page-world `fetch`/`XMLHttpRequest` JSON responses; `content.js` must not inject inline page scripts or patch page-world networking.
 
 ## Local Files
 
@@ -21,10 +39,11 @@ This repository contains a small WebExtension for improving Quera course and ass
 ```sh
 node -e "JSON.parse(require('fs').readFileSync('manifest.json','utf8'))"
 node --check content.js
-scripts/package-release.sh 0.3.0
+node --check page-data-filter.js
+scripts/package-release.sh 0.4.0
 ```
 
-- Inspect generated zips before uploading a release. They should contain only `manifest.json` and `content.js`.
+- Inspect generated zips before uploading a release. They should contain only `manifest.json`, `content.js`, and `page-data-filter.js`.
 
 ## Release Workflow
 

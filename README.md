@@ -1,28 +1,27 @@
 # Fix Quera
 
-Fix Quera is a small browser extension that makes Quera course and assignment pages easier to read.
+Fix Quera is a browser extension that improves Quera course and assignment pages by making deadline and delay information easier to see.
 
-Quera already has the data students need, but deadline and delay details are often spread across the page or hidden behind less useful table columns. Fix Quera keeps that information visible in the places where you actually need it: assignment pages, submission tables, and course assignment lists.
+## Features
 
-## What It Adds
+- Shows the normal deadline and hard deadline on assignment pages.
+- Shows whether an assignment is in normal time, extra time, or finished.
+- Shows the configured extra-time window as `مهلت اضافه`.
+- Shows elapsed delay as `در تاخیر` when the normal deadline has passed but the hard deadline has not.
+- Formats durations in Persian, with Persian digits, such as `۳ روز و ۲۳ ساعت`.
+- Replaces Quera's `ضریب نمره` / `ضریب تاخیر` submission-table column with `میزان تاخیر`.
+- Adds a `میزان تاخیر` column when Quera does not provide one, computing delay from the assignment deadline and each submission timestamp.
+- Shows per-assignment final-submission delay badges on course pages.
+- Shows `مجموع تاخیر` on course pages as the sum of displayed per-assignment delays.
+- Adds local follow/unfollow controls for courses.
+- Filters Quera's upcoming-deadline widget to show only followed courses.
+- Defaults active courses to followed and archived courses to unfollowed until the user chooses otherwise.
+- Caches course-page delay results for 10 minutes.
+- Refreshes stale course delay data through a throttled queue of 1 request per second.
+- Handles Quera client-side navigation without requiring a manual page reload after the extension is already loaded.
+- Supports Chrome and Firefox WebExtension packaging.
 
-- Clear assignment deadline and hard-deadline information.
-- A compact status for normal time, extra time, delay, and finished assignments.
-- Persian duration formatting with Persian digits, such as `۳ روز و ۲۳ ساعت`.
-- A clearer `میزان تاخیر` column in submission tables.
-- Automatic delay calculation when Quera does not show a delay column.
-- Per-assignment final-submission delay badges on course pages.
-- A course-level `مجموع تاخیر` summary.
-
-## How It Works
-
-Fix Quera runs locally in your browser on Quera pages. It reads deadline and submission-delay information from the page HTML, then adds a cleaner interface on top of the existing Quera UI.
-
-On course pages, the extension may fetch assignment final-submission pages from Quera to calculate delay badges. Results are cached locally for a short time so the extension does not repeatedly request the same pages.
-
-Fix Quera does not use analytics, tracking, remote code, or external APIs. See [PRIVACY.md](PRIVACY.md) for the full privacy policy.
-
-## Install
+## Install Locally
 
 ### Chrome
 
@@ -51,11 +50,16 @@ To load a local build:
 
 Fix Quera asks for access to Quera pages so it can read and improve the deadline/submission information shown there. It also uses browser extension storage for a local course-delay cache.
 
+- `manifest.json`
+- `content.js`
+- `page-data-filter.js`
 The cached data stays in your browser. It is not sent to the developer or stored anywhere else by Fix Quera.
 
 ## Development
 
-This extension is intentionally lightweight: the implementation is a WebExtension manifest plus a single content script.
+```sh
+scripts/package-release.sh 0.4.0
+```
 
 To develop locally, clone this repo and load it as an unpacked extension in Chrome (`chrome://extensions/` → Load unpacked) or a temporary add-on in Firefox (`about:debugging` → Load Temporary Add-on).
 

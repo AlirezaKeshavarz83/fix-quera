@@ -22,17 +22,19 @@ jobs:
         run: node -e "JSON.parse(require('fs').readFileSync('manifest.json','utf8'))"
 
       - name: Check content script syntax
-        run: node --check content.js
+        run: |
+          node --check content.js
+          node --check page-data-filter.js
 
       - name: Build release archives
-        run: scripts/package-release.sh 0.3.0
+        run: scripts/package-release.sh 0.4.0
 
       - name: Verify archive contents
         run: |
           node <<'NODE'
           const { execFileSync } = require("node:child_process");
-          const expected = ["content.js", "manifest.json"];
-          for (const archive of ["dist/fix-quera-0.3.0.zip", "dist/fix-quera-firefox-v0.3.0.zip"]) {
+          const expected = ["content.js", "manifest.json", "page-data-filter.js"];
+          for (const archive of ["dist/fix-quera-0.4.0.zip", "dist/fix-quera-firefox-v0.4.0.zip"]) {
             const names = execFileSync("unzip", ["-Z1", archive], { encoding: "utf8" })
               .trim()
               .split(/\n/)
