@@ -4,6 +4,9 @@ All notable changes to fix-quera are documented in this file.
 
 ## v0.4.2 - 2026-06-29
 
+- Fixed archived course deadlines leaking into the upcoming-deadline widget when the course list was viewed with the active filter.
+- Stopped inferring a course's archived state from the selected course-list status filter, so a course referenced outside the current filter (e.g. in the deadline widget) can no longer be mislabeled as active.
+- Made the stored archived flag sticky so a value inferred without page data can no longer overwrite a known archived state.
 - Verified the Chrome release zip contents and compressed data.
 - Verified Firefox 152.0.3 accepts the current temporary add-on manifest with `world: "MAIN"`.
 - Documented compatibility checks and local follow-state default/reset behavior.
