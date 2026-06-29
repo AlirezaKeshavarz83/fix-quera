@@ -32,7 +32,6 @@ let lastCourseAssignmentSignature = "";
 let lastBootRoute = "";
 let routePollTimer = null;
 let activeCourseRenderId = 0;
-let nextDataObserver = null;
 let courseFollowStateCache = null;
 let courseFollowStateReady = null;
 let courseFollowObserver = null;
@@ -1074,6 +1073,36 @@ function storageSet(values) {
   });
 }
 
+function installCourseFollowStateStorageListener() {
+  const onChanged =
+    globalThis.browser?.storage?.onChanged ||
+    globalThis.chrome?.storage?.onChanged;
+
+  if (!onChanged?.addListener) {
+    return;
+  }
+
+  onChanged.addListener((changes, areaName) => {
+    if (areaName && areaName !== "local") {
+      return;
+    }
+
+    const change = changes?.[COURSE_FOLLOW_STATE_KEY];
+    if (!change) {
+      return;
+    }
+
+    const nextState = normalizeCourseFollowState(change.newValue);
+    courseFollowStateCache = nextState;
+    courseFollowStateReady = Promise.resolve(courseFollowStateCache);
+    writeCourseFollowStateMirror(nextState);
+
+    if (isCourseListPage() || isCoursePage()) {
+      scheduleCourseFollowControls();
+    }
+  });
+}
+
 function isExtensionContextInvalidatedError(error) {
   return String(error?.message || error).includes("Extension context invalidated");
 }
@@ -1128,6 +1157,10 @@ async function readCourseFollowState() {
     return cloneCourseFollowState(courseFollowStateCache);
   }
 
+  return readCourseFollowStateFromStorage();
+}
+
+async function readCourseFollowStateFromStorage() {
   if (!courseFollowStateReady) {
     courseFollowStateReady = storageGet(COURSE_FOLLOW_STATE_KEY)
       .then((values) => {
@@ -1152,6 +1185,16 @@ async function readCourseFollowState() {
   return cloneCourseFollowState(courseFollowStateCache);
 }
 
+function primeCourseFollowStateMirror() {
+  readCourseFollowState().catch((error) => {
+    if (isExtensionContextInvalidatedError(error)) {
+      return;
+    }
+
+    console.warn("[Deadline Viewer] course follow state mirror prime failed", error);
+  });
+}
+
 function cloneCourseFollowState(state) {
   return {
     version: 1,
@@ -1159,16 +1202,6 @@ function cloneCourseFollowState(state) {
     assignments: { ...(state?.assignments || {}) },
     overrides: { ...(state?.overrides || {}) }
   };
-}
-
-function readCourseFollowStateMirror() {
-  try {
-    return normalizeCourseFollowState(
-      JSON.parse(window.localStorage.getItem(COURSE_FOLLOW_STATE_MIRROR_KEY) || "null")
-    );
-  } catch {
-    return createEmptyCourseFollowState();
-  }
 }
 
 function writeCourseFollowStateMirror(state) {
@@ -1191,8 +1224,14 @@ async function writeCourseFollowState(state) {
 }
 
 async function updateCourseFollowState(mutator) {
-  const state = await readCourseFollowState();
-  const nextState = mutator(state) || state;
+  courseFollowStateReady = null;
+  const state = await readCourseFollowStateFromStorage();
+  const mutatedState = mutator(state);
+  if (mutatedState === false) {
+    return state;
+  }
+
+  const nextState = mutatedState || state;
   await writeCourseFollowState(nextState);
   return nextState;
 }
@@ -1272,12 +1311,24 @@ function mergeCourseMetadataIntoState(state, courses) {
     }
 
     const previous = state.courses[normalized.id] || {};
-    state.courses[normalized.id] = {
+    const nextCourse = {
       ...previous,
       ...normalized,
-      name: normalized.name || previous.name || normalized.id
+      name: normalized.name || previous.name || normalized.id,
+      lastSeenAt: previous.lastSeenAt || normalized.lastSeenAt
     };
-    changed = true;
+
+    const hasMeaningfulChange =
+      !previous.id ||
+      previous.name !== nextCourse.name ||
+      previous.isArchived !== nextCourse.isArchived ||
+      previous.archivedBy !== nextCourse.archivedBy;
+
+    if (hasMeaningfulChange) {
+      nextCourse.lastSeenAt = normalized.lastSeenAt;
+      state.courses[normalized.id] = nextCourse;
+      changed = true;
+    }
   });
 
   return changed;
@@ -1297,14 +1348,27 @@ function mergeAssignmentMappingsIntoState(state, course, assignments) {
       return;
     }
 
-    state.assignments[assignmentId] = {
+    const previous = state.assignments[assignmentId] || {};
+    const nextAssignment = {
+      ...previous,
       assignmentId,
       courseId: normalizedCourse.id,
       courseName: normalizedCourse.name,
       assignmentName: normalizeText(assignment.name || ""),
-      lastSeenAt: Date.now()
+      lastSeenAt: previous.lastSeenAt || Date.now()
     };
-    changed = true;
+
+    const hasMeaningfulChange =
+      !previous.assignmentId ||
+      previous.courseId !== nextAssignment.courseId ||
+      previous.courseName !== nextAssignment.courseName ||
+      previous.assignmentName !== nextAssignment.assignmentName;
+
+    if (hasMeaningfulChange) {
+      nextAssignment.lastSeenAt = Date.now();
+      state.assignments[assignmentId] = nextAssignment;
+      changed = true;
+    }
   });
 
   return changed;
@@ -1317,8 +1381,7 @@ async function persistFollowStateFromNextData(nextData) {
   }
 
   await updateCourseFollowState((state) => {
-    mergeFollowStateFromPageCourse(state, course);
-    return state;
+    return mergeFollowStateFromPageCourse(state, course) ? state : false;
   });
 }
 
@@ -1354,506 +1417,6 @@ function getCourseName() {
 
 function normalizeText(value) {
   return value.replace(/\s+/g, " ").trim();
-}
-
-function installPageDataResponseFilter() {
-  const root = document.documentElement || document.head;
-  if (!root || root.dataset.qdvPageDataResponseFilter === "true") {
-    return;
-  }
-
-  root.dataset.qdvPageDataResponseFilter = "true";
-
-  const script = document.createElement("script");
-  script.textContent = `(${pageDataResponseFilterScript.toString()})(${JSON.stringify({
-    mirrorKey: COURSE_FOLLOW_STATE_MIRROR_KEY
-  })});`;
-  root.appendChild(script);
-  script.remove();
-}
-
-function pageDataResponseFilterScript(config) {
-  if (window.__qdvPageDataResponseFilterInstalled) {
-    return;
-  }
-
-  window.__qdvPageDataResponseFilterInstalled = true;
-
-  const mirrorKey = config.mirrorKey;
-
-  function createEmptyState() {
-    return {
-      version: 1,
-      courses: {},
-      assignments: {},
-      overrides: {}
-    };
-  }
-
-  function normalizeState(value) {
-    const state = createEmptyState();
-
-    if (!value || typeof value !== "object") {
-      return state;
-    }
-
-    state.courses = value.courses && typeof value.courses === "object"
-      ? { ...value.courses }
-      : {};
-    state.assignments = value.assignments && typeof value.assignments === "object"
-      ? { ...value.assignments }
-      : {};
-    state.overrides = value.overrides && typeof value.overrides === "object"
-      ? { ...value.overrides }
-      : {};
-
-    return state;
-  }
-
-  function readMirror() {
-    try {
-      return normalizeState(JSON.parse(window.localStorage.getItem(mirrorKey) || "null"));
-    } catch {
-      return createEmptyState();
-    }
-  }
-
-  function writeMirror(state) {
-    try {
-      window.localStorage.setItem(mirrorKey, JSON.stringify(normalizeState(state)));
-    } catch {
-      // Extension storage remains authoritative if page storage is unavailable.
-    }
-  }
-
-  function normalizeTextValue(value) {
-    return String(value || "").replace(/\s+/g, " ").trim();
-  }
-
-  function normalizeCourse(course) {
-    if (!course || typeof course !== "object") {
-      return null;
-    }
-
-    const id = String(course.id || course.pk || course.courseId || "");
-    if (!id) {
-      return null;
-    }
-
-    const archivedValue = course.is_archived ?? course.isArchived;
-    const metadata = {
-      id,
-      name: normalizeTextValue(course.name || course.courseName || ""),
-      archivedBy: course.archived_by ?? course.archivedBy ?? null,
-      lastSeenAt: Date.now()
-    };
-
-    if (typeof archivedValue === "boolean") {
-      metadata.isArchived = archivedValue;
-    }
-
-    return metadata;
-  }
-
-  function mergeCourses(state, courses) {
-    let changed = false;
-
-    (courses || []).forEach((course) => {
-      const normalized = normalizeCourse(course);
-      if (!normalized) {
-        return;
-      }
-
-      const previous = state.courses[normalized.id] || {};
-      state.courses[normalized.id] = {
-        ...previous,
-        ...normalized,
-        name: normalized.name || previous.name || normalized.id
-      };
-      changed = true;
-    });
-
-    return changed;
-  }
-
-  function mergeAssignments(state, course, assignments) {
-    const normalizedCourse = normalizeCourse(course);
-    if (!normalizedCourse || !Array.isArray(assignments)) {
-      return false;
-    }
-
-    let changed = mergeCourses(state, [normalizedCourse]);
-
-    assignments.forEach((assignment) => {
-      const assignmentId = String(assignment?.pk || assignment?.id || "");
-      if (!assignmentId) {
-        return;
-      }
-
-      state.assignments[assignmentId] = {
-        assignmentId,
-        courseId: normalizedCourse.id,
-        courseName: normalizedCourse.name,
-        assignmentName: normalizeTextValue(assignment.name || ""),
-        lastSeenAt: Date.now()
-      };
-      changed = true;
-    });
-
-    return changed;
-  }
-
-  function mergeCourseContainer(state, course) {
-    let changed = false;
-    const courseNodes = course?.courses?.edges
-      ?.map((edge) => edge?.node)
-      .filter(Boolean) || [];
-
-    changed = mergeCourses(state, courseNodes) || changed;
-
-    if (course?.id && course?.name) {
-      changed = mergeAssignments(state, course, course.assignments) || changed;
-    }
-
-    return changed;
-  }
-
-  function isCourseFollowed(state, courseId) {
-    const id = String(courseId || "");
-
-    if (!id) {
-      return true;
-    }
-
-    if (typeof state.overrides[id] === "boolean") {
-      return state.overrides[id];
-    }
-
-    const course = state.courses[id];
-    if (course && typeof course.isArchived === "boolean") {
-      return !course.isArchived;
-    }
-
-    return true;
-  }
-
-  function shouldShowDeadline(deadline, state) {
-    const assignmentId = String(deadline?.id || "");
-    const mappedCourseId = state.assignments[assignmentId]?.courseId;
-
-    if (mappedCourseId) {
-      return isCourseFollowed(state, mappedCourseId);
-    }
-
-    const courseName = normalizeTextValue(deadline?.course_name || "");
-    if (!courseName) {
-      return true;
-    }
-
-    const matchingCourses = Object.values(state.courses).filter((course) => {
-      return normalizeTextValue(course.name || "") === courseName;
-    });
-
-    if (!matchingCourses.length) {
-      return true;
-    }
-
-    return matchingCourses.some((course) => {
-      return isCourseFollowed(state, course.id);
-    });
-  }
-
-  function getCourseContainers(rootValue) {
-    const containers = [];
-    const seen = new Set();
-
-    function visit(value, depth) {
-      if (!value || typeof value !== "object" || seen.has(value) || depth > 8) {
-        return;
-      }
-
-      seen.add(value);
-
-      if (Array.isArray(value.course_deadline_widget_data) || value.courses?.edges || value.assignments) {
-        containers.push(value);
-      }
-
-      if (Array.isArray(value)) {
-        value.slice(0, 80).forEach((item) => visit(item, depth + 1));
-        return;
-      }
-
-      Object.keys(value).slice(0, 80).forEach((key) => {
-        visit(value[key], depth + 1);
-      });
-    }
-
-    visit(rootValue?.props?.pageProps?.course, 0);
-    visit(rootValue?.pageProps?.course, 0);
-    visit(rootValue, 0);
-
-    return Array.from(new Set(containers));
-  }
-
-  function filterJsonText(text) {
-    if (!text || !text.includes("course_deadline_widget_data")) {
-      return { changed: false, text };
-    }
-
-    let data;
-    try {
-      data = JSON.parse(text);
-    } catch {
-      return { changed: false, text };
-    }
-
-    const state = readMirror();
-    let changed = false;
-
-    getCourseContainers(data).forEach((course) => {
-      mergeCourseContainer(state, course);
-
-      if (!Array.isArray(course.course_deadline_widget_data)) {
-        return;
-      }
-
-      const originalDeadlines = course.course_deadline_widget_data;
-      const filteredDeadlines = originalDeadlines.filter((deadline) => {
-        return shouldShowDeadline(deadline, state);
-      });
-
-      if (filteredDeadlines.length !== originalDeadlines.length) {
-        course.course_deadline_widget_data = filteredDeadlines;
-        changed = true;
-      }
-    });
-
-    writeMirror(state);
-
-    if (!changed) {
-      return { changed: false, text };
-    }
-
-    return { changed: true, text: JSON.stringify(data) };
-  }
-
-  function shouldTryResponse(url, contentType) {
-    return (
-      String(url || "").includes("/_next/data/") ||
-      String(contentType || "").includes("application/json")
-    );
-  }
-
-  const originalFetch = window.fetch;
-  if (typeof originalFetch === "function") {
-    window.fetch = async function qdvFilteredFetch(...args) {
-      const response = await originalFetch.apply(this, args);
-      const contentType = response.headers?.get?.("content-type") || "";
-
-      if (!shouldTryResponse(response.url || args[0]?.url || args[0], contentType)) {
-        return response;
-      }
-
-      try {
-        const text = await response.clone().text();
-        const result = filterJsonText(text);
-
-        if (!result.changed) {
-          return response;
-        }
-
-        const headers = new Headers(response.headers);
-        headers.delete("content-length");
-
-        return new Response(result.text, {
-          status: response.status,
-          statusText: response.statusText,
-          headers
-        });
-      } catch {
-        return response;
-      }
-    };
-  }
-
-  const xhrPrototype = window.XMLHttpRequest?.prototype;
-  if (xhrPrototype?.open && xhrPrototype?.send && !xhrPrototype.__qdvFiltered) {
-    const originalOpen = xhrPrototype.open;
-    const originalSend = xhrPrototype.send;
-
-    xhrPrototype.__qdvFiltered = true;
-    xhrPrototype.open = function qdvOpen(method, url, ...args) {
-      this.__qdvRequestUrl = String(url || "");
-      return originalOpen.call(this, method, url, ...args);
-    };
-
-    xhrPrototype.send = function qdvSend(...args) {
-      this.addEventListener("readystatechange", function qdvReadystatechange() {
-        if (this.readyState !== 4) {
-          return;
-        }
-
-        const contentType = this.getResponseHeader?.("content-type") || "";
-        if (!shouldTryResponse(this.__qdvRequestUrl, contentType)) {
-          return;
-        }
-
-        try {
-          const result = filterJsonText(this.responseText || "");
-          if (!result.changed) {
-            return;
-          }
-
-          Object.defineProperty(this, "responseText", {
-            configurable: true,
-            get() {
-              return result.text;
-            }
-          });
-
-          if (!this.responseType || this.responseType === "text") {
-            Object.defineProperty(this, "response", {
-              configurable: true,
-              get() {
-                return result.text;
-              }
-            });
-          }
-        } catch {
-          // Leave the original response untouched if the browser refuses overrides.
-        }
-      }, true);
-
-      return originalSend.apply(this, args);
-    };
-  }
-}
-
-function installNextDataFilter() {
-  if (nextDataObserver) {
-    return;
-  }
-
-  filterNextDataWhenAvailable();
-
-  nextDataObserver = new MutationObserver(() => {
-    runSafely(() => {
-      filterNextDataWhenAvailable();
-    });
-  });
-
-  nextDataObserver.observe(document.documentElement || document, {
-    childList: true,
-    characterData: true,
-    subtree: true
-  });
-}
-
-function filterNextDataWhenAvailable() {
-  const script = document.getElementById("__NEXT_DATA__");
-  if (!script?.textContent) {
-    return;
-  }
-
-  const signature = getNextDataFilterSignature(script);
-  if (script.dataset.qdvDeadlineFilterSignature === signature) {
-    return;
-  }
-
-  try {
-    filterNextDataScript(script);
-  } catch (error) {
-    if (isExtensionContextInvalidatedError(error)) {
-      return;
-    }
-
-    if (error?.name === "SyntaxError") {
-      window.setTimeout(filterNextDataWhenAvailable, 25);
-      return;
-    }
-
-    console.warn("[Deadline Viewer] deadline widget filtering failed", error);
-  }
-}
-
-function filterNextDataScript(script) {
-  if (!script?.textContent || script.dataset.qdvDeadlineFiltering === "true") {
-    return;
-  }
-
-  script.dataset.qdvDeadlineFiltering = "true";
-
-  try {
-    const nextData = JSON.parse(script.textContent);
-    const course = nextData?.props?.pageProps?.course;
-    if (!course) {
-      script.dataset.qdvDeadlineFiltered = "true";
-      script.dataset.qdvDeadlineFilterSignature = getNextDataFilterSignature(script);
-      return;
-    }
-
-    const state = readCourseFollowStateMirror();
-    mergeFollowStateFromPageCourse(state, course);
-
-    if (Array.isArray(course.course_deadline_widget_data)) {
-      const originalDeadlines = course.course_deadline_widget_data;
-      const filteredDeadlines = originalDeadlines.filter((deadline) => {
-        return shouldShowDeadlineForFollowState(deadline, state);
-      });
-
-      if (filteredDeadlines.length !== originalDeadlines.length) {
-        course.course_deadline_widget_data = filteredDeadlines;
-        script.textContent = JSON.stringify(nextData);
-      }
-    }
-
-    writeCourseFollowStateMirror(state);
-    script.dataset.qdvDeadlineFiltered = "true";
-    script.dataset.qdvDeadlineFilterSignature = getNextDataFilterSignature(script);
-  } finally {
-    delete script.dataset.qdvDeadlineFiltering;
-  }
-}
-
-function getNextDataFilterSignature(script) {
-  const text = script?.textContent || "";
-  return `${window.location.pathname}${window.location.search}:${text.length}:${hashText(text)}`;
-}
-
-function hashText(value) {
-  let hash = 0;
-
-  for (let index = 0; index < value.length; index += 1) {
-    hash = ((hash << 5) - hash + value.charCodeAt(index)) | 0;
-  }
-
-  return String(hash);
-}
-
-function shouldShowDeadlineForFollowState(deadline, state) {
-  const assignmentId = String(deadline?.id || "");
-  const mappedCourseId = state.assignments[assignmentId]?.courseId;
-
-  if (mappedCourseId) {
-    return isCourseFollowedInState(state, mappedCourseId);
-  }
-
-  const courseName = normalizeText(deadline?.course_name || "");
-  if (!courseName) {
-    return true;
-  }
-
-  const matchingCourses = Object.values(state.courses).filter((course) => {
-    return normalizeText(course.name || "") === courseName;
-  });
-
-  if (!matchingCourses.length) {
-    return true;
-  }
-
-  return matchingCourses.some((course) => {
-    return isCourseFollowedInState(state, course.id);
-  });
 }
 
 function getNextDataCourse() {
@@ -2654,8 +2217,6 @@ function getCourseAssignmentSignature() {
 }
 
 function boot(force = false) {
-  filterNextDataWhenAvailable();
-
   if (!document.body || !document.head) {
     runWhenDocumentReady(() => boot(force));
     return;
@@ -2750,9 +2311,9 @@ function installRouteChangeWatcher() {
   }
 }
 
-installPageDataResponseFilter();
+installCourseFollowStateStorageListener();
+primeCourseFollowStateMirror();
 installRouteChangeWatcher();
-installNextDataFilter();
 runWhenDocumentReady(() => {
   runSafely(() => boot(true));
 });

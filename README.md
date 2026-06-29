@@ -43,6 +43,7 @@ Release archives should contain only:
 
 - `manifest.json`
 - `content.js`
+- `page-data-filter.js`
 
 Build them with:
 
@@ -54,12 +55,14 @@ Generated archives are written to `dist/`. Do not commit them; upload them to th
 
 ## Development Notes
 
-- The extension is intentionally a single content script.
+- The extension uses two content scripts by design.
+- `page-data-filter.js` runs in Quera's page world at `document_start` and owns deadline data filtering for `#__NEXT_DATA__`, `fetch`, and `XMLHttpRequest` JSON payloads.
+- `content.js` runs in the isolated extension world and owns extension storage, follow controls, course metadata collection, assignment mapping, route watching, and delay tags.
 - Quera assignment pages expose deadline data through script globals such as `finish_time` and `extra_time`.
 - Course pages do not expose final delay data directly, so the extension fetches each assignment's `/submissions/final` page.
 - Quera's course list page exposes upcoming deadlines in `#__NEXT_DATA__` at `pageProps.course.course_deadline_widget_data`.
-- Course follow choices are stored locally in browser extension storage, with a same-device Quera-page storage mirror so deadline filtering can run before Quera renders.
-- The content script is injected on all `https://quera.org/*` pages so Quera's React/Next client-side navigation can be detected. Expensive work is still route-gated to course and assignment pages.
+- Course follow choices are stored locally in browser extension storage, with a same-device Quera-page storage mirror so the page-world data filter can run synchronously before Quera renders.
+- The content scripts are injected on all `https://quera.org/*` pages so Quera's React/Next client-side navigation can be detected. Expensive work is still route-gated to course and assignment pages.
 
 ## Maintenance
 

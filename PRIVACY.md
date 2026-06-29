@@ -6,7 +6,7 @@ The extension runs only on Quera pages. It reads deadline, hard-deadline, allowe
 
 For course pages, fix-quera stores a small cache only in the user's local browser extension storage so it can avoid repeated requests to Quera. This cache may include the Quera course ID, assignment ID, assignment name, calculated delay value, display value, fetch time, and fetch status.
 
-For course follow filtering, fix-quera stores local course follow choices and supporting course metadata in the user's local browser extension storage, with a same-device Quera-page storage mirror so filtering can run before Quera renders its deadline widget. This may include Quera course IDs, course names, archive-state flags, assignment-to-course mappings, and whether the user manually chose to follow or unfollow a course.
+For course follow filtering, fix-quera stores local course follow choices and supporting course metadata in the user's local browser extension storage, with a same-device Quera-page storage mirror so the page-world filter can run before Quera renders or updates its deadline widget. This may include Quera course IDs, course names, archive-state flags, assignment-to-course mappings, and whether the user manually chose to follow or unfollow a course.
 
 This cached and preference data stays on the user's device. fix-quera does not send it to the developer, to any third-party service, or to any server controlled by fix-quera. fix-quera does not store this data anywhere outside the user's browser.
 

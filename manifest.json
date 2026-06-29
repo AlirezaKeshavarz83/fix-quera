@@ -17,6 +17,14 @@
       "matches": [
         "https://quera.org/*"
       ],
+      "js": ["page-data-filter.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "https://quera.org/*"
+      ],
       "js": ["content.js"],
       "run_at": "document_start"
     }

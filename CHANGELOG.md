@@ -8,7 +8,7 @@ All notable changes to fix-quera are documented in this file.
 - Filtered Quera's upcoming-deadline widget to show deadlines only for followed courses.
 - Added local course follow preferences, course metadata, and assignment-to-course mapping storage.
 - Defaulted active courses to followed and archived courses to unfollowed until manually overridden.
-- Moved the content script to `document_start` so deadline widget data can be filtered before Quera renders it.
+- Added a page-world `document_start` data filter so hard loads and Quera client-side route JSON can be filtered before rendering.
 - Documented observed Quera course-list and course-detail data shapes for future development.
 
 ## v0.3.0 - 2026-06-24
