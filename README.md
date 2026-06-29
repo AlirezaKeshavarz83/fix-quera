@@ -25,48 +25,52 @@ Fix Quera is a browser extension that improves Quera course and assignment pages
 
 ### Chrome
 
+Install from the [Chrome Web Store](https://chromewebstore.google.com/detail/fix-quera/ipdgalbogcfdhhjcjljkcpnalkpiehle).
+
+To load a local build instead:
+
 1. Open `chrome://extensions/`.
 2. Enable Developer mode.
 3. Click Load unpacked.
 4. Select this project directory.
-5. Reload existing Quera tabs once after installing or reloading the extension.
+5. Reload any Quera tabs that were already open.
 
 ### Firefox
+
+Firefox add-on coming soon.
+
+To load a local build:
 
 1. Open `about:debugging#/runtime/this-firefox`.
 2. Click Load Temporary Add-on.
 3. Select `manifest.json` from this project directory.
+4. Reload any Quera tabs that were already open.
 
-## Release Files
+## Permissions
 
-Release archives should contain only:
+Fix Quera asks for access to Quera pages so it can read and improve the deadline/submission information shown there. It also uses browser extension storage for a local course-delay cache.
 
 - `manifest.json`
 - `content.js`
 - `page-data-filter.js`
+The cached data stays in your browser. It is not sent to the developer or stored anywhere else by Fix Quera.
 
-Build them with:
+## Development
 
 ```sh
 scripts/package-release.sh 0.4.0
 ```
 
-Generated archives are written to `dist/`. Do not commit them; upload them to the matching GitHub Release instead.
+To develop locally, clone this repo and load it as an unpacked extension in Chrome (`chrome://extensions/` → Load unpacked) or a temporary add-on in Firefox (`about:debugging` → Load Temporary Add-on).
 
-## Development Notes
+Useful local checks:
 
-- The extension uses two content scripts by design.
-- `page-data-filter.js` runs in Quera's page world at `document_start` and owns deadline data filtering for `#__NEXT_DATA__`, `fetch`, and `XMLHttpRequest` JSON payloads.
-- `content.js` runs in the isolated extension world and owns extension storage, follow controls, course metadata collection, assignment mapping, route watching, and delay tags.
-- Quera assignment pages expose deadline data through script globals such as `finish_time` and `extra_time`.
-- Course pages do not expose final delay data directly, so the extension fetches each assignment's `/submissions/final` page.
-- Quera's course list page exposes upcoming deadlines in `#__NEXT_DATA__` at `pageProps.course.course_deadline_widget_data`.
-- Course follow choices are stored locally in browser extension storage, with a same-device Quera-page storage mirror so the page-world data filter can run synchronously before Quera renders.
-- The content scripts are injected on all `https://quera.org/*` pages so Quera's React/Next client-side navigation can be detected. Expensive work is still route-gated to course and assignment pages.
+```sh
+node -e "JSON.parse(require('fs').readFileSync('manifest.json','utf8'))"
+node --check content.js
+scripts/package-release.sh <version>
+```
 
-## Maintenance
+The project uses [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `docs:`, `chore:`). Local experiments, captures, and generated zips belong in `.local/` and should not be committed.
 
-- Local captures, screenshots, generated zips, and browser-review experiments belong in `.local/`.
-- Release notes live in `CHANGELOG.md`.
-- Privacy claims live in `PRIVACY.md` and should be kept aligned with extension permissions and storage behavior.
-- Use Conventional Commits and make future changes through pull requests.
+Release notes are kept in [CHANGELOG.md](CHANGELOG.md). Maintainer and agent guidance lives in [AGENTS.md](AGENTS.md).
