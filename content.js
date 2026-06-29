@@ -8,6 +8,7 @@ const COURSE_FOLLOW_STATE_KEY = "qdv-course-follow-state:v1";
 const COURSE_FOLLOW_STATE_MIRROR_KEY = "qdv-course-follow-state-mirror:v1";
 const COURSE_FOLLOW_BUTTON_CLASS = "qdv-course-follow-button";
 const COURSE_FOLLOW_MENUITEM_CLASS = "qdv-course-follow-menuitem";
+const COURSE_FOLLOW_INDICATOR_CLASS = "qdv-course-follow-indicator";
 const COURSE_CACHE_TTL_MS = 10 * 60 * 1000;
 const COURSE_QUEUE_BATCH_SIZE = 1;
 const COURSE_QUEUE_DELAY_MS = 1000;
@@ -644,6 +645,7 @@ function injectStyles() {
     .${COURSE_FOLLOW_MENUITEM_CLASS} {
       display: flex;
       align-items: center;
+      gap: 8px;
       width: 100%;
       min-height: 32px;
       padding: 6px 12px;
@@ -656,10 +658,99 @@ function injectStyles() {
       direction: rtl;
     }
 
+    .${COURSE_FOLLOW_MENUITEM_CLASS} .qdv-course-follow-menuicon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex: 0 0 auto;
+      width: 18px;
+      height: 18px;
+      color: var(--colors-primary, #0076a6);
+    }
+
+    .${COURSE_FOLLOW_MENUITEM_CLASS}.is-unfollow-action .qdv-course-follow-menuicon {
+      color: #c2410c;
+    }
+
+    .${COURSE_FOLLOW_MENUITEM_CLASS} .qdv-course-follow-menuicon svg {
+      display: block;
+      width: 16px;
+      height: 16px;
+      stroke: currentColor;
+    }
+
     .${COURSE_FOLLOW_MENUITEM_CLASS}:hover,
     .${COURSE_FOLLOW_MENUITEM_CLASS}:focus {
       background: var(--chakra-colors-blackAlpha-100, rgba(0, 0, 0, 0.06));
       outline: none;
+    }
+
+    .${COURSE_FOLLOW_INDICATOR_CLASS} {
+      --qdv-primary: var(--colors-primary, #0076a6);
+      --qdv-tooltip-bg: #111827;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      width: 22px;
+      height: 22px;
+      margin-inline-end: 3px;
+      color: var(--qdv-primary);
+      cursor: help;
+      isolation: isolate;
+      vertical-align: middle;
+      z-index: 20;
+    }
+
+    .${COURSE_FOLLOW_INDICATOR_CLASS} svg {
+      display: block;
+      width: 15px;
+      height: 15px;
+      stroke: currentColor;
+    }
+
+    .${COURSE_FOLLOW_INDICATOR_CLASS}::before,
+    .${COURSE_FOLLOW_INDICATOR_CLASS}::after {
+      position: absolute;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(2px);
+      transition: opacity 120ms ease, transform 120ms ease;
+      z-index: 10000;
+    }
+
+    .${COURSE_FOLLOW_INDICATOR_CLASS}::before {
+      content: "";
+      inset-inline-end: 6px;
+      inset-block-end: calc(100% + 3px);
+      border: 5px solid transparent;
+      border-block-start-color: var(--qdv-tooltip-bg);
+    }
+
+    .${COURSE_FOLLOW_INDICATOR_CLASS}::after {
+      content: attr(aria-label);
+      inset-inline-end: 0;
+      inset-block-end: calc(100% + 11px);
+      width: 310px;
+      padding: 7px 9px;
+      color: #ffffff;
+      background-color: var(--qdv-tooltip-bg);
+      border-radius: 4px;
+      box-sizing: border-box;
+      box-shadow: 0 8px 24px rgba(15, 23, 42, 0.35);
+      direction: rtl;
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 500;
+      line-height: 1.4;
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    .${COURSE_FOLLOW_INDICATOR_CLASS}:hover::before,
+    .${COURSE_FOLLOW_INDICATOR_CLASS}:hover::after {
+      opacity: 1;
+      transform: translateY(0);
     }
 
     html[data-theme="dark"] .${COURSE_FOLLOW_BUTTON_CLASS},
@@ -669,6 +760,12 @@ function injectStyles() {
       --qdv-primary-soft: rgba(145, 222, 243, 0.12);
       --qdv-text: #edf2f7;
       --qdv-border: #2d3748;
+    }
+
+    html[data-theme="dark"] .${COURSE_FOLLOW_INDICATOR_CLASS},
+    [data-theme="dark"] .${COURSE_FOLLOW_INDICATOR_CLASS},
+    body.chakra-ui-dark .${COURSE_FOLLOW_INDICATOR_CLASS} {
+      --qdv-primary: #91def3;
     }
   `;
 
@@ -1895,6 +1992,9 @@ function removeExistingCourseFollowUi() {
     document.querySelectorAll(`.${COURSE_FOLLOW_MENUITEM_CLASS}`).forEach((element) => {
       element.remove();
     });
+    document.querySelectorAll(`.${COURSE_FOLLOW_INDICATOR_CLASS}`).forEach((element) => {
+      element.remove();
+    });
   });
 }
 
@@ -1964,6 +2064,7 @@ async function renderCourseFollowControls() {
   }
 
   if (isCourseListPage()) {
+    await renderCourseListFollowIndicators();
     await renderCourseListFollowMenuItem();
   }
 }
@@ -2018,11 +2119,117 @@ function findCourseFollowButtonContainer(courseName) {
   );
 }
 
-async function renderCourseListFollowMenuItem() {
-  const menu = document.querySelector('[role="menu"], .chakra-menu__menu-list');
-  const expandedButton = document.querySelector(
-    'button[aria-expanded="true"].chakra-menu__menu-button'
+async function renderCourseListFollowIndicators() {
+  const links = getCourseCardLinks();
+  if (!links.length) {
+    document.querySelectorAll(`.${COURSE_FOLLOW_INDICATOR_CLASS}`).forEach((element) => {
+      element.remove();
+    });
+    return;
+  }
+
+  const state = await readCourseFollowState();
+  const seenCourseIds = new Set();
+
+  links.forEach((link) => {
+    const course = getCourseMetadataFromCardLink(link);
+    if (!course?.id || seenCourseIds.has(course.id)) {
+      return;
+    }
+
+    seenCourseIds.add(course.id);
+    updateCourseCardFollowIndicator(link, course, isCourseFollowedInState(state, course.id));
+  });
+
+  document.querySelectorAll(`.${COURSE_FOLLOW_INDICATOR_CLASS}`).forEach((indicator) => {
+    if (!seenCourseIds.has(indicator.dataset.courseId || "")) {
+      indicator.remove();
+    }
+  });
+}
+
+function updateCourseCardFollowIndicator(link, course, followed) {
+  const card = findCourseCardContainer(link);
+  const anchor = findCourseFollowIndicatorAnchor(card);
+  if (!anchor) {
+    return;
+  }
+
+  let indicator = Array.from(card.querySelectorAll(`.${COURSE_FOLLOW_INDICATOR_CLASS}`))
+    .find((element) => element.dataset.courseId === course.id);
+
+  if (!followed) {
+    indicator?.remove();
+    return;
+  }
+
+  if (!indicator) {
+    indicator = document.createElement("span");
+    indicator.className = COURSE_FOLLOW_INDICATOR_CLASS;
+    indicator.dataset.courseId = course.id;
+    anchor.insertAdjacentElement("beforebegin", indicator);
+  }
+
+  if (!indicator.firstElementChild) {
+    indicator.replaceChildren(createCourseFollowIcon());
+  }
+
+  indicator.setAttribute(
+    "aria-label",
+    "ددلاین‌های این درس در ویجت مهلت‌ها نمایش داده می‌شوند"
   );
+  indicator.title = "";
+}
+
+function createCourseFollowIcon(crossed = false) {
+  const svgNamespace = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(svgNamespace, "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("fill", "none");
+  svg.setAttribute("stroke-width", "2");
+  svg.setAttribute("stroke-linecap", "round");
+  svg.setAttribute("stroke-linejoin", "round");
+  svg.setAttribute("aria-hidden", "true");
+  svg.setAttribute("focusable", "false");
+
+  const elements = [
+    ["rect", { x: "3", y: "4", width: "18", height: "18", rx: "2", ry: "2" }],
+    ["line", { x1: "16", y1: "2", x2: "16", y2: "6" }],
+    ["line", { x1: "8", y1: "2", x2: "8", y2: "6" }],
+    ["line", { x1: "3", y1: "10", x2: "21", y2: "10" }],
+    ["path", { d: "m8 15 2.5 2.5L16 13" }]
+  ];
+
+  if (crossed) {
+    elements.push(["path", { d: "M4 4l16 16" }]);
+  }
+
+  elements.forEach(([tagName, attributes]) => {
+    const element = document.createElementNS(svgNamespace, tagName);
+    Object.entries(attributes).forEach(([name, value]) => {
+      element.setAttribute(name, value);
+    });
+    svg.appendChild(element);
+  });
+
+  return svg;
+}
+
+function createCourseFollowMenuIcon(crossed) {
+  const icon = document.createElement("span");
+  icon.className = "qdv-course-follow-menuicon";
+  icon.setAttribute("aria-hidden", "true");
+  icon.appendChild(createCourseFollowIcon(crossed));
+  return icon;
+}
+
+function findCourseFollowIndicatorAnchor(card) {
+  return findCourseCardMenuButton(card);
+}
+
+async function renderCourseListFollowMenuItem() {
+  const expandedButton = findExpandedCourseCardMenuButton();
+  const menu = expandedButton ? findControlledCourseCardMenu(expandedButton) : null;
 
   if (!menu || !expandedButton) {
     document.querySelectorAll(`.${COURSE_FOLLOW_MENUITEM_CLASS}`).forEach((element) => {
@@ -2038,6 +2245,13 @@ async function renderCourseListFollowMenuItem() {
 
   const state = await readCourseFollowState();
   const followed = isCourseFollowedInState(state, course.id);
+
+  document.querySelectorAll(`.${COURSE_FOLLOW_MENUITEM_CLASS}`).forEach((element) => {
+    if (element.parentElement !== menu) {
+      element.remove();
+    }
+  });
+
   let item = menu.querySelector(`.${COURSE_FOLLOW_MENUITEM_CLASS}`);
 
   if (!item) {
@@ -2051,7 +2265,11 @@ async function renderCourseListFollowMenuItem() {
   }
 
   item.dataset.courseId = course.id;
-  item.textContent = getCourseFollowLabel(followed);
+  item.classList.toggle("is-unfollow-action", followed);
+  item.replaceChildren(
+    createCourseFollowMenuIcon(followed),
+    document.createTextNode(getCourseFollowLabel(followed))
+  );
   item.onclick = async (event) => {
     event.preventDefault();
     event.stopPropagation();
@@ -2061,6 +2279,74 @@ async function renderCourseListFollowMenuItem() {
     await setCourseFollowOverride(course, !latestFollowed);
     window.location.reload();
   };
+}
+
+function findControlledCourseCardMenu(button) {
+  const menuId = button?.getAttribute("aria-controls");
+  if (!menuId) {
+    return null;
+  }
+
+  const menu = document.getElementById(menuId);
+  if (!menu?.matches('[role="menu"], .chakra-menu__menu-list')) {
+    return null;
+  }
+
+  return menu;
+}
+
+function findExpandedCourseCardMenuButton() {
+  return Array.from(document.querySelectorAll('button[aria-expanded="true"]')).find((button) => {
+    return Boolean(findCourseCardContainer(button));
+  }) || null;
+}
+
+function findCourseCardMenuButton(card) {
+  if (!card) {
+    return null;
+  }
+
+  return Array.from(card.querySelectorAll("button")).find((button) => {
+    const label = normalizeText(
+      button.getAttribute("aria-label") ||
+      button.getAttribute("title") ||
+      button.textContent ||
+      ""
+    );
+
+    return (
+      button.getAttribute("aria-haspopup") === "menu" ||
+      button.getAttribute("aria-expanded") !== null ||
+      button.className?.toString().includes("menu") ||
+      label === "⋮" ||
+      label.includes("گزینه") ||
+      label.includes("منو")
+    );
+  }) || null;
+}
+
+function getCourseCardLinks() {
+  const links = Array.from(document.querySelectorAll('a[href*="/course/"]'));
+  const seen = new Set();
+
+  return links.filter((link) => {
+    const id = getCourseIdFromLink(link);
+    if (!id || seen.has(id)) {
+      return false;
+    }
+
+    seen.add(id);
+    return true;
+  });
+}
+
+function getCourseIdFromLink(link) {
+  try {
+    const url = new URL(link.href, window.location.href);
+    return url.pathname.match(/^\/course\/(\d+)\/?$/)?.[1] || null;
+  } catch {
+    return null;
+  }
 }
 
 function getCurrentCourseMetadata() {
@@ -2076,11 +2362,8 @@ function getCurrentCourseMetadata() {
   });
 }
 
-function getCourseMetadataFromCardMenuButton(button) {
-  const card = findCourseCardContainer(button);
-  const link = card?.querySelector('a[href*="/course/"]');
-  const match = link?.href?.match(/\/course\/(\d+)\/?$/);
-  const courseId = match?.[1] || null;
+function getCourseMetadataFromCardLink(link) {
+  const courseId = getCourseIdFromLink(link);
   const courseNode = findCourseNodeInNextData(courseId);
 
   return normalizeCourseMetadata(
@@ -2092,11 +2375,20 @@ function getCourseMetadataFromCardMenuButton(button) {
   );
 }
 
+function getCourseMetadataFromCardMenuButton(button) {
+  const card = findCourseCardContainer(button);
+  const link = card?.querySelector('a[href*="/course/"]');
+  return getCourseMetadataFromCardLink(link);
+}
+
 function findCourseCardContainer(element) {
   let current = element?.parentElement;
 
   while (current && current !== document.body) {
-    if (current.querySelector?.('a[href*="/course/"]')) {
+    if (
+      current.querySelector?.('a[href*="/course/"]') &&
+      current.querySelector?.("button")
+    ) {
       return current;
     }
 

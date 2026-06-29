@@ -14,6 +14,7 @@ Fix Quera is a browser extension that improves Quera course and assignment pages
 - Shows per-assignment final-submission delay badges on course pages.
 - Shows `مجموع تاخیر` on course pages as the sum of displayed per-assignment delays.
 - Adds local follow/unfollow controls for courses.
+- Shows a compact calendar-check indicator on followed course-list cards.
 - Filters Quera's upcoming-deadline widget to show only followed courses.
 - Defaults active courses to followed and archived courses to unfollowed until the user chooses otherwise.
 - Caches course-page delay results for 10 minutes.
@@ -58,7 +59,7 @@ The cached data stays in your browser. It is not sent to the developer or stored
 ## Development
 
 ```sh
-scripts/package-release.sh 0.4.0
+scripts/package-release.sh 0.4.1
 ```
 
 To develop locally, clone this repo and load it as an unpacked extension in Chrome (`chrome://extensions/` → Load unpacked) or a temporary add-on in Firefox (`about:debugging` → Load Temporary Add-on).

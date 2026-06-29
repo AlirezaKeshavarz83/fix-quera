@@ -40,7 +40,7 @@ This repository contains a small WebExtension for improving Quera course and ass
 node -e "JSON.parse(require('fs').readFileSync('manifest.json','utf8'))"
 node --check content.js
 node --check page-data-filter.js
-scripts/package-release.sh 0.4.0
+scripts/package-release.sh 0.4.1
 ```
 
 - Inspect generated zips before uploading a release. They should contain only `manifest.json`, `content.js`, and `page-data-filter.js`.
