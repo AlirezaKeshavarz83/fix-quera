@@ -23,11 +23,14 @@ Fix Quera is a browser extension that improves Quera course and assignment pages
 - Handles Quera client-side navigation without requiring a manual page reload after the extension is already loaded.
 - Supports Chrome and Firefox WebExtension packaging.
 
+## Install
+
+- [Chrome Web Store](https://chromewebstore.google.com/detail/ipdgalbogcfdhhjcjljkcpnalkpiehle?utm_source=github&utm_medium=readme&utm_campaign=repo_readme&utm_content=chrome)
+- [Firefox Add-on](https://addons.mozilla.org/en-GB/firefox/addon/fix-quera/?utm_source=github&utm_medium=readme&utm_campaign=repo_readme&utm_content=firefox)
+
 ## Install Locally
 
 ### Chrome
-
-Install from the [Chrome Web Store](https://chromewebstore.google.com/detail/fix-quera/ipdgalbogcfdhhjcjljkcpnalkpiehle).
 
 To load a local build instead:
 
@@ -38,8 +41,6 @@ To load a local build instead:
 5. Reload any Quera tabs that were already open.
 
 ### Firefox
-
-Firefox add-on coming soon.
 
 To load a local build:
 
