@@ -2,6 +2,18 @@
 
 All notable changes to fix-quera are documented in this file.
 
+## v0.4.3 - 2026-07-04
+
+- Added adaptive rate limiter for course delay fetches: starts at 1 req/sec, escalates to 1 req/2sec after 10s, 1 req/3sec after 30s, etc. De-escalates after 30s idle. Immediately escalates on 429/5xx responses.
+- Added smart cache TTLs: 3 days for assignments past hard deadline, 1 hour for active assignments on course pages, 5 minutes on assignment pages, instant on submissions pages.
+- Added hard-deadline detection from fetched submission page HTML to determine cache tier.
+- Skipped fetch entirely for assignments whose deadline has not been reached yet.
+- Added lazy delay cache enrichment on assignment and submissions page visits.
+- Fixed input focus loss during background delay fetching by deferring DOM updates while the user is typing and updating badges in-place instead of tearing down and rebuilding.
+- Broke MutationObserver feedback loop in course follow controls via render-key deduplication.
+- Increased route poll timer from 1s to 2s and suppressed it while typing.
+- Changed fetch cache policy from `no-store` to `no-cache` to allow browser 304 responses.
+
 ## v0.4.2 - 2026-06-29
 
 - Fixed archived course deadlines leaking into the upcoming-deadline widget when the course list was viewed with the active filter.
