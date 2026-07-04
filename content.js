@@ -9,10 +9,11 @@ const COURSE_FOLLOW_STATE_MIRROR_KEY = "qdv-course-follow-state-mirror:v1";
 const COURSE_FOLLOW_BUTTON_CLASS = "qdv-course-follow-button";
 const COURSE_FOLLOW_MENUITEM_CLASS = "qdv-course-follow-menuitem";
 const COURSE_FOLLOW_INDICATOR_CLASS = "qdv-course-follow-indicator";
-const COURSE_CACHE_TTL_MS = 10 * 60 * 1000;
+const CACHE_TTL_HARD_DEADLINE_MS = 3 * 24 * 60 * 60 * 1000;
+const CACHE_TTL_ACTIVE_COURSE_MS = 60 * 60 * 1000;
+const CACHE_TTL_ACTIVE_ASSIGNMENT_MS = 5 * 60 * 1000;
 const COURSE_QUEUE_BATCH_SIZE = 1;
-const COURSE_QUEUE_DELAY_MS = 1000;
-const COURSE_QUEUE_JITTER_MS = 250;
+const RATE_LIMIT_DEESCALATE_IDLE_MS = 30000;
 const COURSE_DELAY_STATUS = {
   loading: "loading",
   fresh: "fresh",
@@ -37,6 +38,13 @@ let courseFollowStateCache = null;
 let courseFollowStateReady = null;
 let courseFollowObserver = null;
 let courseFollowRenderTimer = null;
+let lastCourseFollowRenderKey = "";
+
+const rateLimiter = {
+  tier: 1,
+  tierStartedAt: 0,
+  lastRequestAt: 0
+};
 
 function extractDeadlineData() {
   const data = {
@@ -1128,6 +1136,139 @@ function isCourseListPage() {
   return /^\/course\/?$/.test(window.location.pathname);
 }
 
+function isSubmissionsPage() {
+  return /^\/course\/assignments\/\d+\/submissions/.test(window.location.pathname);
+}
+
+function getAssignmentIdFromUrl() {
+  return window.location.pathname.match(/^\/course\/assignments\/(\d+)\//)?.[1] || null;
+}
+
+function getPageContext() {
+  if (isSubmissionsPage()) {
+    return "submissions";
+  }
+  if (isAssignmentPage()) {
+    return "assignment";
+  }
+  return "course";
+}
+
+function getEffectiveCacheTTL(cacheEntry, pageContext) {
+  if (cacheEntry?.hardDeadlinePassed) {
+    return CACHE_TTL_HARD_DEADLINE_MS;
+  }
+  if (pageContext === "submissions") {
+    return 0;
+  }
+  if (pageContext === "assignment") {
+    return CACHE_TTL_ACTIVE_ASSIGNMENT_MS;
+  }
+  return CACHE_TTL_ACTIVE_COURSE_MS;
+}
+
+function isUserTyping() {
+  const active = document.activeElement;
+  if (!active || active === document.body) {
+    return false;
+  }
+  const tag = active.tagName;
+  return tag === "INPUT" || tag === "TEXTAREA" || active.isContentEditable;
+}
+
+function getRateLimitDelayMs() {
+  maybeDeescalateRateLimit();
+  return rateLimiter.tier * 1000 + Math.floor(Math.random() * 250);
+}
+
+function maybeDeescalateRateLimit() {
+  if (!rateLimiter.lastRequestAt) {
+    return;
+  }
+  const idleMs = Date.now() - rateLimiter.lastRequestAt;
+  if (idleMs >= RATE_LIMIT_DEESCALATE_IDLE_MS) {
+    const tiers = Math.floor(idleMs / RATE_LIMIT_DEESCALATE_IDLE_MS);
+    rateLimiter.tier = Math.max(1, rateLimiter.tier - tiers);
+    rateLimiter.tierStartedAt = Date.now();
+  }
+}
+
+function recordRateLimitRequest() {
+  const now = Date.now();
+  maybeDeescalateRateLimit();
+  if (!rateLimiter.tierStartedAt) {
+    rateLimiter.tierStartedAt = now;
+  }
+  rateLimiter.lastRequestAt = now;
+  const tierDurationMs = rateLimiter.tier * 10 * 1000;
+  if (now - rateLimiter.tierStartedAt >= tierDurationMs) {
+    rateLimiter.tier += 1;
+    rateLimiter.tierStartedAt = now;
+  }
+}
+
+function escalateRateLimit() {
+  rateLimiter.tier += 1;
+  rateLimiter.tierStartedAt = Date.now();
+}
+
+function buildAssignmentFinishTimeMap(nextCourse) {
+  const map = new Map();
+  if (!nextCourse?.assignments) {
+    return map;
+  }
+  for (const assignment of nextCourse.assignments) {
+    const id = String(assignment?.pk || assignment?.id || "");
+    const finishTime = assignment?.finish_time;
+    if (id && finishTime) {
+      const date = new Date(finishTime);
+      if (!Number.isNaN(date.getTime())) {
+        map.set(id, date);
+      }
+    }
+  }
+  return map;
+}
+
+function detectHardDeadlinePassedFromDoc(doc) {
+  const patterns = {
+    serverNow: /(?:var|let|const)\s+server_now\s*=\s*new\s+Date\s*\(['"]([^'"]+)['"]\)/,
+    finishTime: /(?:var|let|const)\s+finish_time\s*=\s*new\s+Date\s*\(['"]([^'"]+)['"]\)/,
+    extraTimeSeconds: /(?:var|let|const)\s+extra_time\s*=\s*([0-9]+)/
+  };
+
+  let serverNow = null;
+  let finishTime = null;
+  let extraTimeSeconds = null;
+
+  for (const script of doc.scripts) {
+    const text = script.textContent || "";
+    if (!serverNow) {
+      const match = text.match(patterns.serverNow);
+      if (match) serverNow = new Date(match[1]);
+    }
+    if (!finishTime) {
+      const match = text.match(patterns.finishTime);
+      if (match) finishTime = new Date(match[1]);
+    }
+    if (extraTimeSeconds === null) {
+      const match = text.match(patterns.extraTimeSeconds);
+      if (match) extraTimeSeconds = Number(match[1]);
+    }
+    if (serverNow && finishTime && extraTimeSeconds !== null) {
+      break;
+    }
+  }
+
+  if (!serverNow || !finishTime || extraTimeSeconds === null) {
+    return false;
+  }
+  if (Number.isNaN(serverNow.getTime()) || Number.isNaN(finishTime.getTime())) {
+    return false;
+  }
+  return serverNow >= new Date(finishTime.getTime() + extraTimeSeconds * 1000);
+}
+
 function getExtensionStorage() {
   const api = globalThis.browser?.storage?.local || globalThis.chrome?.storage?.local;
 
@@ -1573,6 +1714,11 @@ async function showCourseDelays() {
     return;
   }
 
+  if (isUserTyping()) {
+    scheduleCourseDelays(1000);
+    return;
+  }
+
   const nextCourse = getNextDataCourse();
   if (nextCourse) {
     persistFollowStateFromNextData({ props: { pageProps: { course: nextCourse } } })
@@ -1593,15 +1739,20 @@ async function showCourseDelays() {
     return;
   }
 
-  removeExistingCourseUi();
   injectStyles();
 
   const state = createCourseDelayState(courseId, courseName, assignments);
 
-  insertCourseTotalBadge(state);
+  if (!document.getElementById(COURSE_TOTAL_ID)) {
+    insertCourseTotalBadge(state);
+  }
 
   for (const assignment of assignments) {
-    insertAssignmentDelayBadge(assignment, COURSE_DELAY_STATUS.loading, "...");
+    if (!assignment.card.querySelector(
+      `.qdv-course-delay[data-assignment-id="${escapeCssIdent(assignment.id)}"]`
+    )) {
+      insertAssignmentDelayBadge(assignment, COURSE_DELAY_STATUS.loading, "...");
+    }
   }
 
   await hydrateCourseDelayState(state);
@@ -1623,25 +1774,41 @@ function createCourseDelayState(courseId, courseName, assignments) {
 
 async function hydrateCourseDelayState(state) {
   const now = Date.now();
+  const nextCourse = getNextDataCourse();
+  const finishTimeMap = buildAssignmentFinishTimeMap(nextCourse);
+  const pageContext = getPageContext();
 
   for (const assignment of state.assignments) {
+    const finishTime = finishTimeMap.get(assignment.id);
+    if (finishTime && finishTime.getTime() > now) {
+      applyAssignmentDelayResult(state, assignment, {
+        delaySeconds: 0,
+        fetchedAt: now,
+        status: COURSE_DELAY_STATUS.fresh
+      });
+      continue;
+    }
+
     const cache = await readAssignmentDelayCache(state.courseId, assignment.id);
 
     if (cache) {
+      const ttl = getEffectiveCacheTTL(cache, pageContext);
+      const isFresh = ttl > 0 && now - Number(cache.fetchedAt) < ttl;
+
       applyAssignmentDelayResult(state, assignment, {
         delaySeconds: Number(cache.delaySeconds) || 0,
         fetchedAt: Number(cache.fetchedAt) || 0,
-        status: now - Number(cache.fetchedAt) >= COURSE_CACHE_TTL_MS
-          ? COURSE_DELAY_STATUS.stale
-          : COURSE_DELAY_STATUS.fresh
+        status: isFresh ? COURSE_DELAY_STATUS.fresh : COURSE_DELAY_STATUS.stale
       });
+
+      if (isFresh) {
+        continue;
+      }
     }
 
-    if (!cache || now - Number(cache.fetchedAt) >= COURSE_CACHE_TTL_MS) {
-      enqueueAssignmentDelayFetch(state, assignment, {
-        showLoading: !cache
-      });
-    }
+    enqueueAssignmentDelayFetch(state, assignment, {
+      showLoading: !cache
+    });
   }
 
   updateCourseTotalBadge(state);
@@ -1653,7 +1820,7 @@ async function readAssignmentDelayCache(courseId, assignmentId) {
   return values?.[key] || null;
 }
 
-async function writeAssignmentDelayCache(courseId, assignment, delaySeconds, status) {
+async function writeAssignmentDelayCache(courseId, assignment, delaySeconds, status, hardDeadlinePassed) {
   const key = getAssignmentDelayCacheKey(courseId, assignment.id);
   await storageSet({
     [key]: {
@@ -1663,7 +1830,8 @@ async function writeAssignmentDelayCache(courseId, assignment, delaySeconds, sta
       delaySeconds,
       displayHours: getRoundedDelayHours(delaySeconds),
       fetchedAt: Date.now(),
-      status
+      status,
+      hardDeadlinePassed: Boolean(hardDeadlinePassed)
     }
   });
 }
@@ -1740,11 +1908,13 @@ async function fetchQueuedAssignmentDelay(work) {
       cacheKey,
       fetchAssignmentDelay(assignment)
         .then(async (result) => {
+          recordRateLimitRequest();
           await writeAssignmentDelayCache(
             courseId,
             assignment,
             result.delaySeconds,
-            COURSE_DELAY_STATUS.fresh
+            COURSE_DELAY_STATUS.fresh,
+            result.hardDeadlinePassed
           );
           return result;
         })
@@ -1753,7 +1923,8 @@ async function fetchQueuedAssignmentDelay(work) {
           return {
             delaySeconds: 0,
             fetchedAt: Date.now(),
-            status: COURSE_DELAY_STATUS.error
+            status: COURSE_DELAY_STATUS.error,
+            hardDeadlinePassed: false
           };
         })
         .finally(() => {
@@ -1776,8 +1947,12 @@ async function fetchAssignmentDelay(assignment) {
   // max delay there for the student view we support.
   const response = await fetch(assignment.finalUrl, {
     credentials: "include",
-    cache: "no-store"
+    cache: "no-cache"
   });
+
+  if (response.status === 429 || response.status >= 500) {
+    escalateRateLimit();
+  }
 
   if (!response.ok) {
     throw new Error(`HTTP ${response.status}`);
@@ -1791,10 +1966,13 @@ async function fetchAssignmentDelay(assignment) {
     .map((element) => Number(element.getAttribute("data-duration")))
     .filter(Number.isFinite);
 
+  const hardDeadlinePassed = detectHardDeadlinePassedFromDoc(doc);
+
   return {
     delaySeconds: delays.length ? Math.max(...delays) : 0,
     fetchedAt: Date.now(),
-    status: COURSE_DELAY_STATUS.fresh
+    status: COURSE_DELAY_STATUS.fresh,
+    hardDeadlinePassed
   };
 }
 
@@ -1835,9 +2013,9 @@ function applyAssignmentDelayResult(state, assignment, result) {
 }
 
 function waitForCourseQueueDelay() {
-  const jitter = Math.floor(Math.random() * COURSE_QUEUE_JITTER_MS);
+  const delayMs = getRateLimitDelayMs();
   return new Promise((resolve) => {
-    setTimeout(resolve, COURSE_QUEUE_DELAY_MS + jitter);
+    setTimeout(resolve, delayMs);
   });
 }
 
@@ -2058,6 +2236,21 @@ async function renderCourseFollowControls() {
   if (!document.body) {
     return;
   }
+
+  if (isUserTyping()) {
+    scheduleCourseFollowControls(1000);
+    return;
+  }
+
+  const state = await readCourseFollowState();
+  const route = window.location.pathname;
+  const cardCount = getCourseCardLinks().length;
+  const renderKey = `${route}:${JSON.stringify(state.overrides)}:${cardCount}`;
+
+  if (renderKey === lastCourseFollowRenderKey) {
+    return;
+  }
+  lastCourseFollowRenderKey = renderKey;
 
   injectStyles();
 
@@ -2484,6 +2677,10 @@ function observeCoursePage() {
   // the assignment list to appear or change, then render once the cards exist.
   courseObserver = new MutationObserver(() => {
     runSafely(() => {
+      if (isUserTyping()) {
+        return;
+      }
+
       const signature = getCourseAssignmentSignature();
       const hasAssignments = Boolean(signature);
       const hasBadges = Boolean(document.querySelector(".qdv-course-delay"));
@@ -2532,6 +2729,7 @@ function boot(force = false) {
   }
 
   lastBootRoute = route;
+  lastCourseFollowRenderKey = "";
 
   if (isCoursePage()) {
     removeExistingUi();
@@ -2565,10 +2763,81 @@ function boot(force = false) {
 
   if (isAssignmentPage()) {
     showDeadlineData();
+    enrichAssignmentDelayCache();
     return;
   }
 
   removeExistingUi();
+}
+
+async function enrichAssignmentDelayCache() {
+  const assignmentId = getAssignmentIdFromUrl();
+  if (!assignmentId) {
+    return;
+  }
+
+  const followState = await readCourseFollowState();
+  const mapping = followState.assignments[assignmentId];
+  if (!mapping?.courseId) {
+    return;
+  }
+
+  const courseId = mapping.courseId;
+  const pageContext = getPageContext();
+  const cache = await readAssignmentDelayCache(courseId, assignmentId);
+
+  if (cache) {
+    const ttl = getEffectiveCacheTTL(cache, pageContext);
+    if (ttl > 0 && Date.now() - Number(cache.fetchedAt) < ttl) {
+      return;
+    }
+  }
+
+  if (pageContext === "submissions") {
+    const delays = Array.from(
+      document.querySelectorAll(".humanize_duration.delay[data-duration]")
+    )
+      .map((el) => Number(el.getAttribute("data-duration")))
+      .filter(Number.isFinite);
+
+    if (delays.length) {
+      const deadlineData = extractDeadlineData();
+      const hardDeadlinePassed = deadlineData
+        ? deadlineData.serverNow.date >= deadlineData.hardFinishTime
+        : false;
+
+      await writeAssignmentDelayCache(
+        courseId,
+        { id: assignmentId, name: mapping.assignmentName || assignmentId },
+        Math.max(...delays),
+        COURSE_DELAY_STATUS.fresh,
+        hardDeadlinePassed
+      );
+      return;
+    }
+  }
+
+  const assignment = {
+    id: assignmentId,
+    name: mapping.assignmentName || assignmentId,
+    finalUrl: `/course/assignments/${assignmentId}/submissions/final`
+  };
+
+  try {
+    const result = await fetchAssignmentDelay(assignment);
+    recordRateLimitRequest();
+    await writeAssignmentDelayCache(
+      courseId,
+      assignment,
+      result.delaySeconds,
+      COURSE_DELAY_STATUS.fresh,
+      result.hardDeadlinePassed
+    );
+  } catch (error) {
+    if (!isExtensionContextInvalidatedError(error)) {
+      console.warn("[Deadline Viewer] assignment delay enrichment failed", error);
+    }
+  }
 }
 
 function installRouteChangeWatcher() {
@@ -2602,8 +2871,12 @@ function installRouteChangeWatcher() {
 
   if (!routePollTimer) {
     routePollTimer = window.setInterval(() => {
-      runSafely(() => boot());
-    }, 1000);
+      runSafely(() => {
+        if (!isUserTyping()) {
+          boot();
+        }
+      });
+    }, 2000);
   }
 }
 
