@@ -13,6 +13,9 @@ Fix Quera is a browser extension that improves Quera course and assignment pages
 - Adds a `میزان تاخیر` column when Quera does not provide one, computing delay from the assignment deadline and each submission timestamp.
 - Shows per-assignment final-submission delay badges on course pages.
 - Shows `مجموع تاخیر` on course pages as the sum of displayed per-assignment delays.
+- Adds local per-course delay budget buckets in the `درسنامه‌ها` section.
+- Supports bucket keywords, manual assignment include/exclude choices, days+hours capacity, and per-bucket rounding by none/hour/day.
+- Shows bucket progress bars, used/remaining capacity, and warnings when assignments are counted in more than one bucket.
 - Adds local follow/unfollow controls for courses.
 - Shows a compact calendar-check indicator on followed course-list cards.
 - Filters Quera's upcoming-deadline widget to show only followed courses.
@@ -51,7 +54,7 @@ To load a local build:
 
 ## Permissions
 
-Fix Quera asks for access to Quera pages so it can read and improve the deadline/submission information shown there. It also uses browser extension storage for a local course-delay cache.
+Fix Quera asks for access to Quera pages so it can read and improve the deadline/submission information shown there. It also uses browser extension storage for a local course-delay cache and local course delay-bucket settings.
 
 - `manifest.json`
 - `content.js`
@@ -67,7 +70,7 @@ The current manifest has been accepted as a temporary add-on in Firefox 152.0.3.
 ## Development
 
 ```sh
-scripts/package-release.sh 0.4.2
+scripts/package-release.sh 0.5.0
 ```
 
 To develop locally, clone this repo and load it as an unpacked extension in Chrome (`chrome://extensions/` → Load unpacked) or a temporary add-on in Firefox (`about:debugging` → Load Temporary Add-on).

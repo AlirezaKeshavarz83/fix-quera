@@ -2,6 +2,16 @@
 
 All notable changes to fix-quera are documented in this file.
 
+## v0.5.0 - 2026-07-04
+
+- Added local per-course delay budget buckets in the `درسنامه‌ها` section.
+- Added bucket creation and editing with optional title, keyword, days+hours capacity, and none/hour/day rounding.
+- Matched assignments into buckets by keyword, with manual assignment include/exclude overrides.
+- Showed bucket usage, remaining capacity, progress bars, stale/loading/error states, and overlap warnings.
+- Moved bucket creation, editing, and assignment management into a modal with a simpler capacity field and member-only assignment controls.
+- Simplified bucket cards and refined the modal capacity, rounding, and assignment-add controls.
+- Kept delay bucket settings local in browser extension storage.
+
 ## v0.4.3 - 2026-07-04
 
 - Added adaptive rate limiter for course delay fetches: starts at 1 req/sec, escalates to 1 req/2sec after 10s, 1 req/3sec after 30s, etc. De-escalates after 30s idle. Immediately escalates on 429/5xx responses.

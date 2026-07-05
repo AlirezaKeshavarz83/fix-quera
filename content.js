@@ -4,6 +4,8 @@ const TOOLTIP_ID = "deadline-viewer-tooltip";
 const TEHRAN_TIME_ZONE = "Asia/Tehran";
 const COURSE_TOTAL_ID = "deadline-viewer-course-total";
 const COURSE_CACHE_PREFIX = "qdv-course-delay";
+const COURSE_DELAY_BUCKETS_KEY = "qdv-course-delay-buckets:v1";
+const COURSE_DELAY_BUCKET_PANEL_ID = "deadline-viewer-delay-buckets";
 const COURSE_FOLLOW_STATE_KEY = "qdv-course-follow-state:v1";
 const COURSE_FOLLOW_STATE_MIRROR_KEY = "qdv-course-follow-state-mirror:v1";
 const COURSE_FOLLOW_BUTTON_CLASS = "qdv-course-follow-button";
@@ -31,6 +33,7 @@ let courseQueueRunning = false;
 let courseRenderTimer = null;
 let courseObserver = null;
 let lastCourseAssignmentSignature = "";
+let delayBucketRenderTimer = null;
 let lastBootRoute = "";
 let routePollTimer = null;
 let activeCourseRenderId = 0;
@@ -39,6 +42,7 @@ let courseFollowStateReady = null;
 let courseFollowObserver = null;
 let courseFollowRenderTimer = null;
 let lastCourseFollowRenderKey = "";
+let courseBucketEditor = null;
 
 const rateLimiter = {
   tier: 1,
@@ -774,6 +778,743 @@ function injectStyles() {
     [data-theme="dark"] .${COURSE_FOLLOW_INDICATOR_CLASS},
     body.chakra-ui-dark .${COURSE_FOLLOW_INDICATOR_CLASS} {
       --qdv-primary: #91def3;
+    }
+
+    #${COURSE_DELAY_BUCKET_PANEL_ID} {
+      --qdv-primary: var(--colors-primary, #0076a6);
+      --qdv-primary-soft: var(--colors-primary-hover-opaque, rgba(0, 168, 214, 0.07));
+      --qdv-text: var(--chakra-colors-text-normal, #1a202c);
+      --qdv-muted: var(--chakra-colors-text-pale, #718096);
+      --qdv-border: var(--colors-border, var(--chakra-colors-border-gray, #e2e8f0));
+      --qdv-surface: var(--chakra-colors-bg-pale, #ffffff);
+      width: 100%;
+      color: var(--qdv-text);
+      direction: rtl;
+      font-family: inherit;
+    }
+
+    #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-toolbar,
+    #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-list,
+    #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-form,
+    #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-card,
+    .qdv-bucket-modal,
+    .qdv-bucket-dialog {
+      box-sizing: border-box;
+    }
+
+    #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-heading {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-title {
+      color: var(--qdv-text);
+      font-size: 13px;
+      font-weight: 800;
+      line-height: 1.5;
+    }
+
+    #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-empty {
+      margin: 0;
+      padding: 10px 12px;
+      color: var(--qdv-muted);
+      background: var(--qdv-primary-soft);
+      border: 1px dashed var(--qdv-border);
+      border-radius: 6px;
+      font-size: 12px;
+      line-height: 1.7;
+    }
+
+    #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 10px;
+    }
+
+    #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-card {
+      padding: 12px;
+      background: transparent;
+      border: 1px solid var(--qdv-border);
+      border-radius: 8px;
+    }
+
+    #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-form {
+      padding: 12px;
+      background: var(--qdv-surface);
+      border: 1px solid var(--qdv-border);
+      border-radius: 8px;
+    }
+
+    #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-card.is-over {
+      border-color: rgba(220, 64, 64, 0.42);
+    }
+
+    #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-card.is-warning {
+      border-color: rgba(183, 121, 31, 0.42);
+    }
+
+    #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-card-head,
+    #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-card-actions,
+    #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-metrics,
+    #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-form-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-card-head,
+    #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-metrics {
+      justify-content: space-between;
+    }
+
+    #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-card-name {
+      min-width: 0;
+      color: var(--qdv-text);
+      font-size: 13px;
+      font-weight: 800;
+      line-height: 1.6;
+    }
+
+    #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-card-title-wrap {
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+      min-width: 0;
+    }
+
+    #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-card-capacity {
+      flex: 0 0 auto;
+      color: var(--qdv-muted);
+      font-size: 10px;
+      font-weight: 700;
+      line-height: 1.5;
+      white-space: nowrap;
+    }
+
+    #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-note {
+      color: var(--qdv-muted);
+      font-size: 11px;
+      line-height: 1.6;
+    }
+
+    #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-note.has-warning {
+      color: #b7791f;
+    }
+
+    #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-note.has-error {
+      color: #dc4040;
+    }
+
+    #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-progress {
+      position: relative;
+      height: 8px;
+      margin: 10px 0;
+      overflow: hidden;
+      background: var(--qdv-primary-soft);
+      border-radius: 999px;
+    }
+
+    #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-progress-fill {
+      height: 100%;
+      width: 0;
+      background: var(--qdv-primary);
+      border-radius: inherit;
+      transition: width 160ms ease;
+    }
+
+    #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-card.is-over .qdv-bucket-progress-fill {
+      background: #dc4040;
+    }
+
+    #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-metric {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+    }
+
+    #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-metric-label {
+      color: var(--qdv-muted);
+      font-size: 10px;
+      line-height: 1.4;
+    }
+
+    #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-metric-value {
+      color: var(--qdv-text);
+      font-size: 12px;
+      font-weight: 800;
+      line-height: 1.5;
+      font-variant-numeric: tabular-nums;
+    }
+
+    #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-metric-value.is-over {
+      color: #dc4040;
+    }
+
+    #${COURSE_DELAY_BUCKET_PANEL_ID} button,
+    #${COURSE_DELAY_BUCKET_PANEL_ID} input,
+    #${COURSE_DELAY_BUCKET_PANEL_ID} select {
+      font: inherit;
+    }
+
+    #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 30px;
+      padding: 5px 10px;
+      color: var(--qdv-primary);
+      background: var(--qdv-primary-soft);
+      border: 1px solid transparent;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 800;
+      line-height: 1.5;
+      white-space: nowrap;
+    }
+
+    #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-button:hover,
+    #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-button:focus {
+      border-color: var(--qdv-primary);
+      outline: none;
+    }
+
+    #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-button.is-subtle {
+      color: var(--qdv-muted);
+      background: transparent;
+      border-color: var(--qdv-border);
+    }
+
+    #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-button.is-danger {
+      color: #dc4040;
+      background: rgba(220, 64, 64, 0.08);
+    }
+
+    #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-gear {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 30px;
+      height: 30px;
+      padding: 0;
+      color: var(--qdv-muted);
+      background: transparent;
+      border: 1px solid var(--qdv-border);
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-info-button,
+    .qdv-bucket-modal .qdv-bucket-info-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 30px;
+      height: 30px;
+      padding: 0;
+      color: var(--qdv-muted);
+      background: transparent;
+      border: 1px solid var(--qdv-border);
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-info-button:hover,
+    #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-info-button:focus,
+    .qdv-bucket-modal .qdv-bucket-info-button:hover,
+    .qdv-bucket-modal .qdv-bucket-info-button:focus {
+      color: var(--qdv-primary);
+      border-color: var(--qdv-primary);
+      outline: none;
+    }
+
+    #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-info-button svg,
+    .qdv-bucket-modal .qdv-bucket-info-button svg {
+      display: block;
+      width: 16px;
+      height: 16px;
+      stroke: currentColor;
+    }
+
+    #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-gear:hover,
+    #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-gear:focus {
+      color: var(--qdv-primary);
+      border-color: var(--qdv-primary);
+      outline: none;
+    }
+
+    #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-gear svg {
+      display: block;
+      width: 16px;
+      height: 16px;
+      stroke: currentColor;
+    }
+
+    .qdv-bucket-modal {
+      --qdv-primary: var(--colors-primary, #0076a6);
+      --qdv-primary-soft: var(--colors-primary-hover-opaque, rgba(0, 168, 214, 0.07));
+      --qdv-primary-softer: rgba(0, 168, 214, 0.04);
+      --qdv-text: var(--chakra-colors-text-normal, #1a202c);
+      --qdv-muted: var(--chakra-colors-text-pale, #718096);
+      --qdv-border: var(--colors-border, var(--chakra-colors-border-gray, #e2e8f0));
+      --qdv-border-soft: rgba(113, 128, 150, 0.24);
+      --qdv-surface: transparent;
+      --qdv-surface-raised: #ffffff;
+      position: fixed;
+      inset: 0;
+      z-index: 2147483647;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+      color: var(--qdv-text);
+      background: rgba(15, 23, 42, 0.52);
+      direction: rtl;
+      font-family: inherit;
+    }
+
+    .qdv-bucket-dialog {
+      display: flex;
+      flex-direction: column;
+      width: min(680px, 100%);
+      max-height: min(760px, calc(100vh - 36px));
+      overflow: hidden;
+      background: var(--qdv-surface-raised);
+      border: 1px solid var(--qdv-border);
+      border-radius: 8px;
+      box-shadow: 0 20px 50px rgba(15, 23, 42, 0.32);
+    }
+
+    .qdv-bucket-modal-head,
+    .qdv-bucket-modal-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--qdv-border-soft);
+    }
+
+    .qdv-bucket-modal-head {
+      justify-content: space-between;
+      min-height: 54px;
+    }
+
+    .qdv-bucket-modal-head-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .qdv-bucket-modal-actions {
+      justify-content: flex-end;
+      flex-wrap: wrap;
+      border-top: 1px solid var(--qdv-border-soft);
+      border-bottom: 0;
+      background: var(--qdv-surface-raised);
+    }
+
+    .qdv-bucket-modal-title {
+      color: var(--qdv-text);
+      font-size: 13px;
+      font-weight: 800;
+      line-height: 1.5;
+    }
+
+    .qdv-bucket-modal-body {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      overflow: auto;
+      padding: 16px 16px 20px;
+      scroll-padding-bottom: 76px;
+    }
+
+    .qdv-bucket-modal button,
+    .qdv-bucket-modal input,
+    .qdv-bucket-modal select {
+      font: inherit;
+    }
+
+    .qdv-bucket-modal .qdv-bucket-form {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin: 0;
+      padding: 0;
+      border: 0;
+      background: transparent;
+    }
+
+    .qdv-bucket-modal .qdv-bucket-capacity {
+      display: grid;
+      grid-column: 1 / -1;
+      gap: 6px;
+    }
+
+    .qdv-bucket-modal .qdv-bucket-capacity-title {
+      color: var(--qdv-text);
+      font-size: 11px;
+      font-weight: 800;
+      line-height: 1.5;
+    }
+
+    .qdv-bucket-modal .qdv-bucket-capacity-fields {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .qdv-bucket-modal .qdv-bucket-section-title {
+      color: var(--qdv-text);
+      font-size: 12px;
+      font-weight: 800;
+      line-height: 1.6;
+    }
+
+    .qdv-bucket-modal .qdv-bucket-member-section {
+      padding-top: 2px;
+      border-top: 1px solid var(--qdv-border-soft);
+    }
+
+    .qdv-bucket-modal .qdv-bucket-member-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .qdv-bucket-modal .qdv-bucket-assignment-list {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      margin-top: 8px;
+    }
+
+    .qdv-bucket-modal .qdv-bucket-assignment {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 8px;
+      min-height: 42px;
+      padding: 6px 0;
+      border-bottom: 1px solid var(--qdv-border-soft);
+      font-size: 12px;
+    }
+
+    .qdv-bucket-modal .qdv-bucket-assignment:last-child {
+      border-bottom: 0;
+    }
+
+    .qdv-bucket-modal .qdv-bucket-assignment-name {
+      min-width: 0;
+      overflow: hidden;
+      color: var(--qdv-text);
+      font-weight: 700;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .qdv-bucket-modal .qdv-bucket-assignment-meta {
+      color: var(--qdv-muted);
+      font-size: 11px;
+      line-height: 1.5;
+      white-space: nowrap;
+    }
+
+    .qdv-bucket-modal .qdv-bucket-pick-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 8px;
+      min-height: 38px;
+      padding: 5px 0;
+      border-top: 1px solid var(--qdv-border-soft);
+    }
+
+    .qdv-bucket-modal .qdv-bucket-pick-row:first-child {
+      border-top: 0;
+    }
+
+    .qdv-bucket-modal .qdv-bucket-icon-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 30px;
+      height: 30px;
+      color: var(--qdv-primary);
+      background: transparent;
+      border: 1px solid transparent;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 18px;
+      font-weight: 800;
+      line-height: 1;
+    }
+
+    .qdv-bucket-modal .qdv-bucket-icon-button:hover,
+    .qdv-bucket-modal .qdv-bucket-icon-button:focus {
+      background: var(--qdv-primary-soft);
+      border-color: var(--qdv-primary);
+      outline: none;
+    }
+
+    .qdv-bucket-modal .qdv-bucket-icon-button.is-danger {
+      color: #dc4040;
+      background: transparent;
+    }
+
+    .qdv-bucket-modal .qdv-bucket-icon-button.is-danger:hover,
+    .qdv-bucket-modal .qdv-bucket-icon-button.is-danger:focus {
+      background: rgba(220, 64, 64, 0.08);
+      border-color: currentColor;
+    }
+
+    .qdv-bucket-modal .qdv-bucket-icon-button svg {
+      display: block;
+      width: 15px;
+      height: 15px;
+      stroke: currentColor;
+    }
+
+    .qdv-bucket-modal .qdv-bucket-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--qdv-text);
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .qdv-bucket-modal .qdv-bucket-rounding {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .qdv-bucket-modal .qdv-bucket-toggle input {
+      width: 16px;
+      height: 16px;
+      margin: 0;
+      accent-color: var(--qdv-primary);
+    }
+
+    .qdv-bucket-modal .qdv-bucket-field {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 0;
+    }
+
+    .qdv-bucket-modal .qdv-bucket-field.is-wide,
+    .qdv-bucket-modal .qdv-bucket-field.is-hidden {
+      grid-column: 1 / -1;
+    }
+
+    .qdv-bucket-modal .qdv-bucket-field.is-hidden {
+      display: none;
+    }
+
+    .qdv-bucket-modal .qdv-bucket-field label {
+      color: var(--qdv-text);
+      font-size: 11px;
+      font-weight: 800;
+      line-height: 1.5;
+    }
+
+    .qdv-bucket-modal .qdv-bucket-field input,
+    .qdv-bucket-modal .qdv-bucket-field select {
+      min-width: 0;
+      min-height: 34px;
+      padding: 6px 9px;
+      color: var(--qdv-text);
+      background: var(--qdv-surface);
+      border: 1px solid var(--qdv-border);
+      border-radius: 6px;
+      direction: rtl;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .qdv-bucket-modal .qdv-bucket-field input:focus,
+    .qdv-bucket-modal .qdv-bucket-field select:focus {
+      border-color: var(--qdv-primary);
+      box-shadow: 0 0 0 1px var(--qdv-primary);
+      outline: none;
+    }
+
+    .qdv-bucket-modal .qdv-bucket-field-help {
+      color: var(--qdv-muted);
+      font-size: 10px;
+      line-height: 1.6;
+    }
+
+    .qdv-bucket-modal .qdv-bucket-add-list {
+      margin-top: 8px;
+      padding: 4px 0 0;
+      border-top: 1px solid var(--qdv-border-soft);
+      border-radius: 6px;
+    }
+
+    .qdv-bucket-modal .qdv-bucket-add-button-row {
+      display: flex;
+      justify-content: flex-start;
+      margin-top: 8px;
+    }
+
+    .qdv-bucket-modal .qdv-bucket-help {
+      color: var(--qdv-text);
+      font-size: 12px;
+      line-height: 1.8;
+    }
+
+    .qdv-bucket-modal .qdv-bucket-help p {
+      margin: 0;
+    }
+
+    .qdv-bucket-modal .qdv-bucket-help ul {
+      margin: 8px 0 0;
+      padding: 0 18px 0 0;
+    }
+
+    .qdv-bucket-modal .qdv-bucket-help li {
+      margin: 4px 0;
+    }
+
+    .qdv-bucket-modal .qdv-bucket-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      min-height: 30px;
+      padding: 5px 10px;
+      color: #ffffff;
+      background: var(--qdv-primary);
+      border: 1px solid transparent;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 800;
+      line-height: 1.5;
+      white-space: nowrap;
+    }
+
+    .qdv-bucket-modal .qdv-bucket-button:hover,
+    .qdv-bucket-modal .qdv-bucket-button:focus {
+      filter: brightness(0.96);
+      outline: none;
+    }
+
+    .qdv-bucket-modal .qdv-bucket-button.is-subtle {
+      color: var(--qdv-muted);
+      background: transparent;
+      border-color: var(--qdv-border);
+    }
+
+    .qdv-bucket-modal .qdv-bucket-button.is-danger {
+      color: #dc4040;
+      background: transparent;
+      border-color: transparent;
+    }
+
+    .qdv-bucket-modal .qdv-bucket-button.is-danger:hover,
+    .qdv-bucket-modal .qdv-bucket-button.is-danger:focus {
+      background: rgba(220, 64, 64, 0.08);
+      border-color: currentColor;
+      filter: none;
+    }
+
+    .qdv-bucket-modal .qdv-bucket-button svg {
+      display: block;
+      width: 14px;
+      height: 14px;
+      stroke: currentColor;
+    }
+
+    html[data-theme="dark"] #${COURSE_DELAY_BUCKET_PANEL_ID},
+    [data-theme="dark"] #${COURSE_DELAY_BUCKET_PANEL_ID},
+    body.chakra-ui-dark #${COURSE_DELAY_BUCKET_PANEL_ID},
+    html[data-theme="dark"] .qdv-bucket-modal,
+    [data-theme="dark"] .qdv-bucket-modal,
+    body.chakra-ui-dark .qdv-bucket-modal {
+      --qdv-primary: #91def3;
+      --qdv-primary-soft: rgba(145, 222, 243, 0.12);
+      --qdv-primary-softer: rgba(145, 222, 243, 0.06);
+      --qdv-text: #edf2f7;
+      --qdv-muted: #a0aec0;
+      --qdv-border: #2d3748;
+      --qdv-border-soft: rgba(160, 174, 192, 0.22);
+      --qdv-surface: #1a202c;
+      --qdv-surface-raised: #1a202c;
+    }
+
+    html[data-theme="dark"] #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-card,
+    [data-theme="dark"] #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-card,
+    body.chakra-ui-dark #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-card {
+      background: var(--qdv-surface);
+    }
+
+    html[data-theme="dark"] #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-button.is-danger,
+    [data-theme="dark"] #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-button.is-danger,
+    body.chakra-ui-dark #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-button.is-danger,
+    html[data-theme="dark"] .qdv-bucket-modal .qdv-bucket-button.is-danger,
+    [data-theme="dark"] .qdv-bucket-modal .qdv-bucket-button.is-danger,
+    body.chakra-ui-dark .qdv-bucket-modal .qdv-bucket-button.is-danger,
+    html[data-theme="dark"] .qdv-bucket-modal .qdv-bucket-icon-button.is-danger,
+    [data-theme="dark"] .qdv-bucket-modal .qdv-bucket-icon-button.is-danger,
+    body.chakra-ui-dark .qdv-bucket-modal .qdv-bucket-icon-button.is-danger {
+      color: #feb2b2;
+    }
+
+    html[data-theme="dark"] .qdv-bucket-modal .qdv-bucket-button:not(.is-subtle):not(.is-danger),
+    [data-theme="dark"] .qdv-bucket-modal .qdv-bucket-button:not(.is-subtle):not(.is-danger),
+    body.chakra-ui-dark .qdv-bucket-modal .qdv-bucket-button:not(.is-subtle):not(.is-danger) {
+      color: #12212a;
+    }
+
+    @media (max-width: 640px) {
+      #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-toolbar,
+      #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-card-head,
+      #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-metrics {
+        align-items: stretch;
+        flex-direction: column;
+      }
+
+      #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-form {
+        grid-template-columns: 1fr;
+      }
+
+      .qdv-bucket-modal {
+        align-items: stretch;
+        padding: 10px;
+      }
+
+      .qdv-bucket-dialog {
+        max-height: calc(100vh - 20px);
+      }
+
+      .qdv-bucket-modal .qdv-bucket-form {
+        grid-template-columns: 1fr;
+      }
+
+      .qdv-bucket-modal .qdv-bucket-modal-actions {
+        justify-content: stretch;
+      }
+
+      .qdv-bucket-modal .qdv-bucket-button {
+        flex: 1 1 auto;
+      }
     }
   `;
 
@@ -1679,8 +2420,127 @@ function getNextDataCourse() {
   }
 }
 
-function getCourseAssignments() {
+function createEmptyDelayBucketState() {
+  return {
+    version: 1,
+    courses: {}
+  };
+}
+
+function normalizeDelayBucketState(value) {
+  const state = createEmptyDelayBucketState();
+
+  if (!value || typeof value !== "object") {
+    return state;
+  }
+
+  const courses = value.courses && typeof value.courses === "object"
+    ? value.courses
+    : {};
+
+  Object.entries(courses).forEach(([courseId, courseState]) => {
+    const buckets = Array.isArray(courseState?.buckets)
+      ? courseState.buckets
+      : [];
+
+    state.courses[String(courseId)] = {
+      buckets: buckets
+        .map((bucket, index) => normalizeDelayBucket(bucket, index))
+        .filter(Boolean)
+    };
+  });
+
+  return state;
+}
+
+function normalizeDelayBucket(bucket, index = 0) {
+  if (!bucket || typeof bucket !== "object") {
+    return null;
+  }
+
+  const id = normalizeText(String(bucket.id || ""));
+  const keyword = normalizeText(bucket.keyword || "");
+
+  if (!id || !keyword) {
+    return null;
+  }
+
+  const overrides = {};
+  if (bucket.overrides && typeof bucket.overrides === "object") {
+    Object.entries(bucket.overrides).forEach(([assignmentId, value]) => {
+      if (value === "include" || value === "exclude") {
+        overrides[String(assignmentId)] = value;
+      }
+    });
+  }
+
+  const rounding = ["none", "hour", "day"].includes(bucket.rounding)
+    ? bucket.rounding
+    : "hour";
+
+  return {
+    id,
+    title: normalizeText(bucket.title || ""),
+    keyword,
+    capacityHours: Math.max(0, Math.floor(Number(bucket.capacityHours) || 0)),
+    rounding,
+    order: Number.isFinite(Number(bucket.order)) ? Number(bucket.order) : index,
+    overrides,
+    createdAt: Number(bucket.createdAt) || Date.now(),
+    updatedAt: Number(bucket.updatedAt) || Date.now()
+  };
+}
+
+async function readDelayBucketState() {
+  const values = await storageGet(COURSE_DELAY_BUCKETS_KEY);
+  return normalizeDelayBucketState(values?.[COURSE_DELAY_BUCKETS_KEY]);
+}
+
+async function writeDelayBucketState(state) {
+  await storageSet({
+    [COURSE_DELAY_BUCKETS_KEY]: normalizeDelayBucketState(state)
+  });
+}
+
+async function updateDelayBucketState(mutator) {
+  const state = await readDelayBucketState();
+  const mutatedState = mutator(state);
+  await writeDelayBucketState(mutatedState || state);
+  return mutatedState || state;
+}
+
+function getCourseDelayBucketState(state, courseId) {
+  const id = String(courseId || "");
+  if (!state.courses[id]) {
+    state.courses[id] = { buckets: [] };
+  }
+
+  state.courses[id].buckets.sort((a, b) => a.order - b.order);
+  return state.courses[id];
+}
+
+function createDelayBucketId() {
+  return `bucket-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function getCourseAssignments(nextCourse = getNextDataCourse()) {
   const assignmentsById = new Map();
+
+  if (Array.isArray(nextCourse?.assignments)) {
+    nextCourse.assignments.forEach((assignment) => {
+      const id = String(assignment?.pk || assignment?.id || "");
+      if (!id) {
+        return;
+      }
+
+      assignmentsById.set(id, {
+        id,
+        name: normalizeText(assignment.name || id),
+        finalUrl: `/course/assignments/${id}/submissions/final`,
+        card: null
+      });
+    });
+  }
 
   document
     .querySelectorAll('a[href*="/course/assignments/"][href*="/problems"]')
@@ -1688,7 +2548,7 @@ function getCourseAssignments() {
       const url = new URL(link.href, window.location.href);
       const id = url.pathname.match(/\/course\/assignments\/(\d+)\/problems\/?/)?.[1];
 
-      if (!id || assignmentsById.has(id)) {
+      if (!id) {
         return;
       }
 
@@ -1697,9 +2557,11 @@ function getCourseAssignments() {
         return;
       }
 
+      const previous = assignmentsById.get(id) || {};
       assignmentsById.set(id, {
+        ...previous,
         id,
-        name: normalizeText(link.textContent || link.getAttribute("title") || id),
+        name: normalizeText(link.textContent || link.getAttribute("title") || previous.name || id),
         finalUrl: `/course/assignments/${id}/submissions/final`,
         card
       });
@@ -1732,10 +2594,13 @@ async function showCourseDelays() {
   }
 
   const courseName = getCourseName();
-  const assignments = getCourseAssignments();
+  const assignments = getCourseAssignments(nextCourse);
 
   if (!assignments.length) {
     injectStyles();
+    removeExistingCourseUi();
+    const emptyState = createCourseDelayState(courseId, courseName, []);
+    await renderDelayBucketPanel(emptyState);
     return;
   }
 
@@ -1746,9 +2611,10 @@ async function showCourseDelays() {
   if (!document.getElementById(COURSE_TOTAL_ID)) {
     insertCourseTotalBadge(state);
   }
+  await renderDelayBucketPanel(state);
 
   for (const assignment of assignments) {
-    if (!assignment.card.querySelector(
+    if (assignment.card && !assignment.card.querySelector(
       `.qdv-course-delay[data-assignment-id="${escapeCssIdent(assignment.id)}"]`
     )) {
       insertAssignmentDelayBadge(assignment, COURSE_DELAY_STATUS.loading, "...");
@@ -1766,7 +2632,9 @@ function createCourseDelayState(courseId, courseName, assignments) {
     courseName,
     renderId: activeCourseRenderId,
     assignments,
+    delaySecondsByAssignment: new Map(),
     delayHoursByAssignment: new Map(),
+    statusByAssignment: new Map(),
     failedAssignments: new Set(),
     pendingAssignments: new Set(assignments.map((assignment) => assignment.id))
   };
@@ -1845,6 +2713,7 @@ function enqueueAssignmentDelayFetch(state, assignment, options = {}) {
   const showLoading = options.showLoading !== false;
 
   state.pendingAssignments.add(assignment.id);
+  state.statusByAssignment.set(assignment.id, COURSE_DELAY_STATUS.loading);
   if (showLoading) {
     insertAssignmentDelayBadge(assignment, COURSE_DELAY_STATUS.loading, "...");
   }
@@ -1984,9 +2853,10 @@ function applyAssignmentDelayResult(state, assignment, result) {
   const delaySeconds = Number(result.delaySeconds) || 0;
   const delayHours = getRoundedDelayHours(delaySeconds);
   const status = result.status || COURSE_DELAY_STATUS.fresh;
-  const hadKnownValue = state.delayHoursByAssignment.has(assignment.id);
+  const hadKnownValue = state.delaySecondsByAssignment.has(assignment.id);
 
   state.pendingAssignments.delete(assignment.id);
+  state.statusByAssignment.set(assignment.id, status);
 
   if (status === COURSE_DELAY_STATUS.error) {
     state.failedAssignments.add(assignment.id);
@@ -2007,6 +2877,7 @@ function applyAssignmentDelayResult(state, assignment, result) {
     state.failedAssignments.delete(assignment.id);
   }
 
+  state.delaySecondsByAssignment.set(assignment.id, delaySeconds);
   state.delayHoursByAssignment.set(assignment.id, delayHours);
   insertAssignmentDelayBadge(assignment, status, formatRoundedHours(delayHours));
   updateCourseTotalBadge(state);
@@ -2020,6 +2891,10 @@ function waitForCourseQueueDelay() {
 }
 
 function insertAssignmentDelayBadge(assignment, status, value) {
+  if (!assignment.card) {
+    return;
+  }
+
   const badge = getOrCreateAssignmentDelayBadge(assignment);
   badge.className = `qdv-course-delay is-${status}`;
   badge.title = getAssignmentDelayTitle(status);
@@ -2030,6 +2905,10 @@ function insertAssignmentDelayBadge(assignment, status, value) {
 }
 
 function getOrCreateAssignmentDelayBadge(assignment) {
+  if (!assignment.card) {
+    return null;
+  }
+
   let badge = assignment.card.querySelector(
     `.qdv-course-delay[data-assignment-id="${escapeCssIdent(assignment.id)}"]`
   );
@@ -2116,7 +2995,8 @@ function insertCourseTotalBadge(state) {
     return;
   }
 
-  state.assignments[0]?.card?.parentElement?.prepend(total);
+  const firstCard = state.assignments.find((assignment) => assignment.card)?.card;
+  firstCard?.parentElement?.prepend(total);
 }
 
 function updateCourseTotalBadge(state) {
@@ -2157,6 +3037,1223 @@ function updateCourseTotalBadge(state) {
     document.createTextNode("مجموع تاخیر"),
     createCourseDelayValue(hasAllValues ? formatRoundedHours(totalHours) : "...")
   );
+
+  scheduleDelayBucketPanelRender(state);
+}
+
+async function renderDelayBucketPanel(courseDelayState) {
+  if (courseDelayState.renderId !== activeCourseRenderId) {
+    return;
+  }
+
+  injectStyles();
+  captureDelayBucketEditor();
+
+  const bucketState = await readDelayBucketState();
+  const courseBuckets = getCourseDelayBucketState(bucketState, courseDelayState.courseId);
+  const panel = getOrCreateDelayBucketPanel(courseDelayState);
+
+  if (!panel) {
+    return;
+  }
+
+  panel.replaceChildren(
+    createDelayBucketToolbar(courseDelayState, courseBuckets),
+    ...createDelayBucketBody(courseDelayState, courseBuckets)
+  );
+
+  if (courseBucketEditor?.courseId === courseDelayState.courseId) {
+    const modal = courseBucketEditor.mode === "info"
+      ? createDelayBucketInfoModal(courseDelayState)
+      : createDelayBucketModal(
+        courseDelayState,
+        courseBuckets,
+        courseBuckets.buckets.find((bucket) => bucket.id === courseBucketEditor.bucketId)
+      );
+    panel.appendChild(modal);
+    if (courseBucketEditor.needsInitialFocus) {
+      courseBucketEditor.needsInitialFocus = false;
+      focusInitialDelayBucketModalField(modal);
+    }
+  }
+}
+
+function scheduleDelayBucketPanelRender(courseDelayState, delayMs = 0) {
+  if (delayBucketRenderTimer) {
+    clearTimeout(delayBucketRenderTimer);
+  }
+
+  delayBucketRenderTimer = setTimeout(() => {
+    delayBucketRenderTimer = null;
+
+    if (courseDelayState.renderId !== activeCourseRenderId) {
+      return;
+    }
+
+    if (isUserTyping()) {
+      scheduleDelayBucketPanelRender(courseDelayState, 1000);
+      return;
+    }
+
+    renderDelayBucketPanel(courseDelayState).catch((error) => {
+      if (isExtensionContextInvalidatedError(error)) {
+        return;
+      }
+
+      console.warn("[Deadline Viewer] delay bucket render failed", error);
+    });
+  }, delayMs);
+}
+
+function getOrCreateDelayBucketPanel(courseDelayState) {
+  let panel = document.getElementById(COURSE_DELAY_BUCKET_PANEL_ID);
+  if (panel) {
+    return panel;
+  }
+
+  panel = document.createElement("section");
+  panel.id = COURSE_DELAY_BUCKET_PANEL_ID;
+  panel.dir = "rtl";
+
+  const lectureSection = findCourseLecturesSection();
+  if (lectureSection?.children?.length > 1) {
+    lectureSection.children[0].insertAdjacentElement("afterend", panel);
+    return panel;
+  }
+
+  if (lectureSection) {
+    lectureSection.appendChild(panel);
+    return panel;
+  }
+
+  const firstCard = courseDelayState.assignments.find((assignment) => assignment.card)?.card;
+  if (firstCard?.parentElement) {
+    firstCard.parentElement.insertAdjacentElement("afterend", panel);
+    return panel;
+  }
+
+  document.querySelector("main")?.appendChild(panel);
+  return panel;
+}
+
+function findCourseLecturesSection() {
+  const heading = Array.from(document.querySelectorAll("h1, h2, h3, h4")).find(
+    (element) => normalizeText(element.textContent || "").includes("درسنامه")
+  );
+
+  return heading?.parentElement?.parentElement || null;
+}
+
+function createDelayBucketToolbar(courseDelayState, courseBuckets) {
+  const toolbar = document.createElement("div");
+  toolbar.className = "qdv-bucket-toolbar";
+
+  const heading = document.createElement("div");
+  heading.className = "qdv-bucket-heading";
+
+  const title = document.createElement("div");
+  title.className = "qdv-bucket-title";
+  title.textContent = "بودجه تاخیر";
+
+  const infoButton = createDelayBucketInfoButton(courseDelayState, {
+    returnFocus: { type: "info" }
+  });
+  infoButton.dataset.bucketAction = "info";
+
+  heading.append(title, infoButton);
+
+  const addButton = document.createElement("button");
+  addButton.type = "button";
+  addButton.className = "qdv-bucket-button";
+  addButton.dataset.bucketAction = "add";
+  addButton.textContent = "افزودن باکت";
+  addButton.addEventListener("click", () => {
+    courseBucketEditor = {
+      courseId: courseDelayState.courseId,
+      mode: "create",
+      bucketId: null,
+      draft: createDelayBucketDraft(),
+      adding: false,
+      needsInitialFocus: true,
+      returnFocus: { type: "add" }
+    };
+    renderDelayBucketPanel(courseDelayState);
+  });
+
+  toolbar.append(heading, addButton);
+  return toolbar;
+}
+
+function createDelayBucketBody(courseDelayState, courseBuckets) {
+  const children = [];
+
+  if (!courseBuckets.buckets.length) {
+    const empty = document.createElement("p");
+    empty.className = "qdv-bucket-empty";
+    empty.textContent = "هنوز باکتی ندارید.";
+    children.push(empty);
+    return children;
+  }
+
+  const list = document.createElement("div");
+  list.className = "qdv-bucket-list";
+
+  const membershipCounts = getDelayBucketMembershipCounts(courseDelayState, courseBuckets);
+  courseBuckets.buckets.forEach((bucket) => {
+    list.appendChild(createDelayBucketCard(courseDelayState, courseBuckets, bucket, membershipCounts));
+  });
+
+  children.push(list);
+  return children;
+}
+
+function createDelayBucketDraft(bucket = {}) {
+  const capacityHours = Math.max(0, Math.floor(Number(bucket.capacityHours) || 0));
+  const capacityDays = Math.floor(capacityHours / 24);
+  const remainingHours = capacityHours % 24;
+  return {
+    title: bucket.title || "",
+    keyword: bucket.keyword || "",
+    capacityDays: capacityDays ? String(capacityDays) : "",
+    capacityHours: remainingHours ? String(remainingHours) : "",
+    roundingEnabled: bucket.rounding && bucket.rounding !== "none",
+    rounding: bucket.rounding && bucket.rounding !== "none" ? bucket.rounding : "hour"
+  };
+}
+
+function captureDelayBucketEditor() {
+  if (!courseBucketEditor) {
+    return;
+  }
+
+  const modal = document.querySelector(".qdv-bucket-modal");
+  const form = modal?.querySelector(".qdv-bucket-form");
+  if (form) {
+    courseBucketEditor.draft = {
+      title: form.querySelector('[name="title"]')?.value || "",
+      keyword: form.querySelector('[name="keyword"]')?.value || "",
+      capacityDays: form.querySelector('[name="capacityDays"]')?.value || "",
+      capacityHours: form.querySelector('[name="capacityHours"]')?.value || "",
+      roundingEnabled: Boolean(form.querySelector('[name="roundingEnabled"]')?.checked),
+      rounding: form.querySelector('[name="rounding"]')?.value || "hour"
+    };
+  }
+}
+
+function createDelayBucketModal(courseDelayState, courseBuckets, editingBucket) {
+  const modalTitleId = `qdv-bucket-modal-title-${courseDelayState.courseId}`;
+  const modal = document.createElement("div");
+  modal.className = "qdv-bucket-modal";
+  modal.setAttribute("role", "dialog");
+  modal.setAttribute("aria-modal", "true");
+  modal.setAttribute("aria-labelledby", modalTitleId);
+  modal.addEventListener("click", (event) => {
+    if (event.target === modal) {
+      if (courseBucketEditor?.mode === "info") {
+        closeDelayBucketInfoModal(courseDelayState);
+      } else {
+        closeDelayBucketModal(courseDelayState);
+      }
+    }
+  });
+  modal.addEventListener("keydown", (event) => {
+    handleDelayBucketModalKeydown(event, courseDelayState, modal);
+  });
+
+  const dialog = document.createElement("div");
+  dialog.className = "qdv-bucket-dialog";
+  dialog.addEventListener("click", (event) => {
+    event.stopPropagation();
+  });
+
+  const form = createDelayBucketForm(editingBucket);
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    await saveDelayBucketFromModal(courseDelayState, editingBucket, form);
+  });
+
+  const body = document.createElement("div");
+  body.className = "qdv-bucket-modal-body";
+  body.appendChild(form);
+
+  if (editingBucket) {
+    body.appendChild(createDelayBucketMemberManager(courseDelayState, courseBuckets, editingBucket));
+  }
+
+  dialog.append(
+    createDelayBucketModalHead(courseDelayState, editingBucket, modalTitleId),
+    body,
+    createDelayBucketModalActions(courseDelayState, editingBucket, form)
+  );
+  modal.appendChild(dialog);
+  return modal;
+}
+
+function createDelayBucketInfoModal(courseDelayState) {
+  const modalTitleId = `qdv-bucket-info-title-${courseDelayState.courseId}`;
+  const modal = document.createElement("div");
+  modal.className = "qdv-bucket-modal";
+  modal.setAttribute("role", "dialog");
+  modal.setAttribute("aria-modal", "true");
+  modal.setAttribute("aria-labelledby", modalTitleId);
+  modal.addEventListener("click", (event) => {
+    if (event.target === modal) {
+      closeDelayBucketInfoModal(courseDelayState);
+    }
+  });
+  modal.addEventListener("keydown", (event) => {
+    handleDelayBucketModalKeydown(event, courseDelayState, modal);
+  });
+
+  const dialog = document.createElement("div");
+  dialog.className = "qdv-bucket-dialog";
+  dialog.addEventListener("click", (event) => {
+    event.stopPropagation();
+  });
+
+  const head = document.createElement("div");
+  head.className = "qdv-bucket-modal-head";
+
+  const title = document.createElement("div");
+  title.id = modalTitleId;
+  title.className = "qdv-bucket-modal-title";
+  title.textContent = "راهنمای باکت تاخیر";
+
+  const close = document.createElement("button");
+  close.type = "button";
+  close.className = "qdv-bucket-icon-button";
+  close.setAttribute("aria-label", "بستن");
+  close.appendChild(createBucketIcon("x"));
+  close.addEventListener("click", () => closeDelayBucketInfoModal(courseDelayState));
+
+  head.append(title, close);
+
+  const body = document.createElement("div");
+  body.className = "qdv-bucket-modal-body";
+  body.appendChild(createDelayBucketHelpContent());
+
+  dialog.append(head, body);
+  modal.appendChild(dialog);
+  return modal;
+}
+
+function createDelayBucketHelpContent() {
+  const help = document.createElement("div");
+  help.className = "qdv-bucket-help";
+
+  [
+    "در این بخش می‌تونید مجموع تاخیر مجاز مصرف شده و باقی‌مونده‌تون رو رصد کنید.",
+    "می‌تونید برای انواع مختلف تمرین باکت‌های مختلف تعریف کنید.",
+    "برای هر باکت مجموع تاخیر مجاز و کلیدواژه‌ای که این تمرین‌ها رو پیدا می‌کنه رو مشخص کنید.",
+    "هر تمرینی که عنوانش کلیدواژه‌ی مشخص شده رو داشته باشه به طور خودکار به باکت اضافه میشه. می‌تونید دستی تمرین‌ها رو حذف و اضافه کنید."
+  ].forEach((text) => {
+    const paragraph = document.createElement("p");
+    paragraph.textContent = text;
+    help.appendChild(paragraph);
+  });
+
+  return help;
+}
+
+function createDelayBucketInfoButton(courseDelayState, options = {}) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "qdv-bucket-info-button";
+  button.setAttribute("aria-label", "راهنمای باکت تاخیر");
+  button.title = "راهنما";
+  button.appendChild(createBucketIcon("info", 19));
+  button.addEventListener("click", () => {
+    if (options.fromEditor) {
+      captureDelayBucketEditor();
+    }
+
+    const previousEditor = options.fromEditor && courseBucketEditor
+      ? { ...courseBucketEditor, needsInitialFocus: false }
+      : null;
+
+    courseBucketEditor = {
+      courseId: courseDelayState.courseId,
+      mode: "info",
+      previousEditor,
+      needsInitialFocus: true,
+      returnFocus: options.returnFocus || courseBucketEditor?.returnFocus || { type: "info" }
+    };
+    renderDelayBucketPanel(courseDelayState);
+  });
+  return button;
+}
+
+async function closeDelayBucketInfoModal(courseDelayState) {
+  const previousEditor = courseBucketEditor?.previousEditor || null;
+  const focusTarget = courseBucketEditor?.returnFocus || null;
+
+  if (previousEditor) {
+    previousEditor.needsInitialFocus = true;
+    courseBucketEditor = previousEditor;
+    await renderDelayBucketPanel(courseDelayState);
+    return;
+  }
+
+  courseBucketEditor = null;
+  await renderDelayBucketPanel(courseDelayState);
+  restoreDelayBucketFocus(focusTarget);
+}
+
+function handleDelayBucketModalKeydown(event, courseDelayState, modal) {
+  if (event.key === "Escape") {
+    event.preventDefault();
+    if (courseBucketEditor?.mode === "info") {
+      closeDelayBucketInfoModal(courseDelayState);
+    } else {
+      closeDelayBucketModal(courseDelayState);
+    }
+    return;
+  }
+
+  if (event.key !== "Tab") {
+    return;
+  }
+
+  const focusable = getDelayBucketModalFocusableElements(modal);
+  if (!focusable.length) {
+    event.preventDefault();
+    return;
+  }
+
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  const active = document.activeElement;
+
+  if (event.shiftKey && active === first) {
+    event.preventDefault();
+    last.focus();
+    return;
+  }
+
+  if (!event.shiftKey && active === last) {
+    event.preventDefault();
+    first.focus();
+    return;
+  }
+
+  if (!modal.contains(active)) {
+    event.preventDefault();
+    first.focus();
+  }
+}
+
+function getDelayBucketModalFocusableElements(modal) {
+  return Array.from(modal.querySelectorAll(
+    'button, input, select, textarea, a[href], [tabindex]:not([tabindex="-1"])'
+  )).filter((element) => {
+    return !element.disabled && element.offsetParent !== null;
+  });
+}
+
+function focusInitialDelayBucketModalField(modal) {
+  window.setTimeout(() => {
+    const preferred = modal.querySelector('input[name="keyword"]')
+      || modal.querySelector('input[name="title"]')
+      || getDelayBucketModalFocusableElements(modal)[0];
+    preferred?.focus();
+  }, 0);
+}
+
+function restoreDelayBucketFocus(focusTarget) {
+  if (!focusTarget) {
+    return;
+  }
+
+  window.setTimeout(() => {
+    const panel = document.getElementById(COURSE_DELAY_BUCKET_PANEL_ID);
+    if (!panel) {
+      return;
+    }
+
+    const target = focusTarget.type === "bucket"
+      ? panel.querySelector(`.qdv-bucket-gear[data-bucket-id="${escapeCssIdent(focusTarget.bucketId)}"]`)
+      : focusTarget.type === "info"
+        ? panel.querySelector('[data-bucket-action="info"]')
+      : panel.querySelector('[data-bucket-action="add"]');
+    target?.focus();
+  }, 0);
+}
+
+function createDelayBucketModalHead(courseDelayState, editingBucket, modalTitleId) {
+  const head = document.createElement("div");
+  head.className = "qdv-bucket-modal-head";
+
+  const title = document.createElement("div");
+  title.id = modalTitleId;
+  title.className = "qdv-bucket-modal-title";
+  title.textContent = editingBucket ? "مدیریت باکت" : "افزودن باکت";
+
+  const close = document.createElement("button");
+  close.type = "button";
+  close.className = "qdv-bucket-icon-button";
+  close.setAttribute("aria-label", "بستن");
+  close.appendChild(createBucketIcon("x"));
+  close.addEventListener("click", () => closeDelayBucketModal(courseDelayState));
+
+  const actions = document.createElement("div");
+  actions.className = "qdv-bucket-modal-head-actions";
+  actions.append(
+    createDelayBucketInfoButton(courseDelayState, {
+      fromEditor: true
+    }),
+    close
+  );
+
+  head.append(title, actions);
+  return head;
+}
+
+function createDelayBucketForm(editingBucket) {
+  const form = document.createElement("form");
+  form.className = "qdv-bucket-form";
+  form.dataset.bucketId = editingBucket?.id || "";
+
+  const draft = courseBucketEditor?.draft || createDelayBucketDraft(editingBucket);
+
+  form.append(
+    createDelayBucketField("کلیدواژه", "keyword", "text", draft.keyword, {
+      required: true
+    }),
+    createDelayBucketField("عنوان اختیاری", "title", "text", draft.title, {
+      help: "اگر خالی بماند، کلیدواژه روی کارت نمایش داده می‌شود."
+    }),
+    createDelayBucketCapacityFields(draft),
+    createDelayBucketRoundingField(draft)
+  );
+
+  return form;
+}
+
+function createDelayBucketCapacityFields(draft) {
+  const wrapper = document.createElement("div");
+  wrapper.className = "qdv-bucket-capacity";
+
+  const title = document.createElement("div");
+  title.className = "qdv-bucket-capacity-title";
+  title.textContent = "ظرفیت";
+
+  const fields = document.createElement("div");
+  fields.className = "qdv-bucket-capacity-fields";
+  fields.append(
+    createDelayBucketField("روز", "capacityDays", "number", draft.capacityDays, {
+      min: "0"
+    }),
+    createDelayBucketField("ساعت", "capacityHours", "number", draft.capacityHours, {
+      min: "0"
+    })
+  );
+
+  wrapper.append(
+    title,
+    fields
+  );
+  return wrapper;
+}
+
+function createDelayBucketField(labelText, name, type, value, attributes = {}) {
+  const field = document.createElement("div");
+  field.className = "qdv-bucket-field";
+  if (type === "text") {
+    field.classList.add("is-wide");
+  }
+
+  const label = document.createElement("label");
+  const inputId = `qdv-bucket-input-${name}`;
+  label.setAttribute("for", inputId);
+  label.textContent = labelText;
+
+  const input = document.createElement("input");
+  input.id = inputId;
+  input.name = name;
+  input.type = type;
+  input.value = value;
+  Object.entries(attributes).forEach(([key, attributeValue]) => {
+    if (key === "help") {
+      return;
+    }
+
+    if (attributeValue === true) {
+      input.setAttribute(key, "");
+    } else {
+      input.setAttribute(key, attributeValue);
+    }
+  });
+
+  field.append(label, input);
+
+  if (attributes.help) {
+    const help = document.createElement("span");
+    help.className = "qdv-bucket-field-help";
+    help.textContent = attributes.help;
+    field.appendChild(help);
+  }
+
+  return field;
+}
+
+function createDelayBucketRoundingField(draft) {
+  const field = document.createElement("div");
+  field.className = "qdv-bucket-field is-wide qdv-bucket-rounding";
+
+  const toggleLabel = document.createElement("label");
+  toggleLabel.className = "qdv-bucket-toggle";
+
+  const checkbox = document.createElement("input");
+  checkbox.type = "checkbox";
+  checkbox.name = "roundingEnabled";
+  checkbox.checked = Boolean(draft.roundingEnabled);
+
+  toggleLabel.append(checkbox, document.createTextNode("گرد کردن تاخیر"));
+
+  const select = document.createElement("select");
+  select.name = "rounding";
+
+  [
+    ["hour", "گرد به ساعت بالاتر"],
+    ["day", "گرد به روز بالاتر"]
+  ].forEach(([optionValue, text]) => {
+    const option = document.createElement("option");
+    option.value = optionValue;
+    option.textContent = text;
+    option.selected = optionValue === draft.rounding;
+    select.appendChild(option);
+  });
+
+  const selectContainer = document.createElement("div");
+  selectContainer.className = "qdv-bucket-field";
+  selectContainer.classList.toggle("is-hidden", !checkbox.checked);
+  selectContainer.appendChild(select);
+
+  checkbox.addEventListener("change", () => {
+    selectContainer.classList.toggle("is-hidden", !checkbox.checked);
+  });
+
+  field.append(toggleLabel, selectContainer);
+  return field;
+}
+
+function createDelayBucketModalActions(courseDelayState, editingBucket, form) {
+  const actions = document.createElement("div");
+  actions.className = "qdv-bucket-modal-actions";
+
+  const save = document.createElement("button");
+  save.type = "button";
+  save.className = "qdv-bucket-button";
+  save.textContent = editingBucket ? "ذخیره تغییرات" : "ساخت باکت";
+  save.addEventListener("click", async () => {
+    await saveDelayBucketFromModal(courseDelayState, editingBucket, form);
+  });
+
+  const cancel = document.createElement("button");
+  cancel.type = "button";
+  cancel.className = "qdv-bucket-button is-subtle";
+  cancel.textContent = "بستن";
+  cancel.addEventListener("click", () => closeDelayBucketModal(courseDelayState));
+
+  actions.append(save, cancel);
+
+  if (editingBucket) {
+    const deleteButton = document.createElement("button");
+    deleteButton.type = "button";
+    deleteButton.className = "qdv-bucket-button is-danger";
+    deleteButton.append(createBucketIcon("trash"), document.createTextNode("حذف"));
+    deleteButton.addEventListener("click", async () => {
+      await deleteDelayBucket(courseDelayState.courseId, editingBucket.id);
+      await closeDelayBucketModal(courseDelayState, { type: "add" });
+    });
+    actions.appendChild(deleteButton);
+  }
+
+  return actions;
+}
+
+async function saveDelayBucketFromModal(courseDelayState, editingBucket, form) {
+  const values = getDelayBucketFormValues(form);
+  if (!values.keyword) {
+    form.querySelector('[name="keyword"]')?.focus();
+    return;
+  }
+
+  if (!values.capacityHours) {
+    form.querySelector('[name="capacityDays"]')?.focus();
+    return;
+  }
+
+  await saveDelayBucket(courseDelayState.courseId, editingBucket, values);
+  const focusTarget = editingBucket
+    ? { type: "bucket", bucketId: editingBucket.id }
+    : { type: "add" };
+  courseBucketEditor = null;
+  await renderDelayBucketPanel(courseDelayState);
+  restoreDelayBucketFocus(focusTarget);
+}
+
+async function closeDelayBucketModal(courseDelayState, overrideFocusTarget = null) {
+  const focusTarget = overrideFocusTarget || courseBucketEditor?.returnFocus || null;
+  courseBucketEditor = null;
+  await renderDelayBucketPanel(courseDelayState);
+  restoreDelayBucketFocus(focusTarget);
+}
+
+function getDelayBucketFormValues(form) {
+  const roundingEnabled = Boolean(form.querySelector('[name="roundingEnabled"]')?.checked);
+  const rounding = roundingEnabled
+    ? form.querySelector('[name="rounding"]')?.value || "hour"
+    : "none";
+
+  return {
+    title: normalizeText(form.querySelector('[name="title"]')?.value || ""),
+    keyword: normalizeText(form.querySelector('[name="keyword"]')?.value || ""),
+    capacityHours: getCapacityHoursFromInputs(form),
+    rounding: ["none", "hour", "day"].includes(rounding) ? rounding : "hour"
+  };
+}
+
+function getCapacityHoursFromInputs(form) {
+  const days = parseNonNegativeInteger(form.querySelector('[name="capacityDays"]')?.value);
+  const hours = parseNonNegativeInteger(form.querySelector('[name="capacityHours"]')?.value);
+  return days * 24 + hours;
+}
+
+function parseNonNegativeInteger(value) {
+  const normalized = normalizePersianDigits(String(value || ""));
+  const number = Number.parseInt(normalized, 10);
+  return Number.isFinite(number) ? Math.max(0, number) : 0;
+}
+
+async function saveDelayBucket(courseId, editingBucket, values) {
+  await updateDelayBucketState((state) => {
+    const courseBuckets = getCourseDelayBucketState(state, courseId);
+    const now = Date.now();
+
+    if (editingBucket) {
+      const existing = courseBuckets.buckets.find((bucket) => bucket.id === editingBucket.id);
+      if (existing) {
+        existing.title = values.title;
+        existing.keyword = values.keyword;
+        existing.capacityHours = values.capacityHours;
+        existing.rounding = values.rounding;
+        existing.updatedAt = now;
+      }
+      return state;
+    }
+
+    courseBuckets.buckets.push({
+      id: createDelayBucketId(),
+      title: values.title,
+      keyword: values.keyword,
+      capacityHours: values.capacityHours,
+      rounding: values.rounding,
+      order: courseBuckets.buckets.length,
+      overrides: {},
+      createdAt: now,
+      updatedAt: now
+    });
+    return state;
+  });
+}
+
+async function deleteDelayBucket(courseId, bucketId) {
+  await updateDelayBucketState((state) => {
+    const courseBuckets = getCourseDelayBucketState(state, courseId);
+    courseBuckets.buckets = courseBuckets.buckets.filter((bucket) => bucket.id !== bucketId);
+    courseBuckets.buckets.forEach((bucket, index) => {
+      bucket.order = index;
+      bucket.updatedAt = Date.now();
+    });
+    return state;
+  });
+}
+
+function createDelayBucketCard(courseDelayState, courseBuckets, bucket, membershipCounts) {
+  const summary = getDelayBucketSummary(courseDelayState, bucket);
+  const overlaps = summary.assignments.filter((assignment) => {
+    return (membershipCounts.get(assignment.id) || 0) > 1;
+  });
+  const hasOverlap = overlaps.length > 0;
+
+  const card = document.createElement("article");
+  card.className = "qdv-bucket-card";
+  card.classList.toggle("is-over", summary.remainingHours < 0);
+  card.classList.toggle("is-warning", hasOverlap && summary.remainingHours >= 0);
+
+  card.append(
+    createDelayBucketCardHead(courseDelayState, bucket, summary),
+    createDelayBucketProgress(summary),
+    createDelayBucketMetrics(summary),
+    createDelayBucketNote(summary, overlaps)
+  );
+
+  return card;
+}
+
+function createDelayBucketCardHead(courseDelayState, bucket, summary) {
+  const head = document.createElement("div");
+  head.className = "qdv-bucket-card-head";
+
+  const titleWrap = document.createElement("div");
+  titleWrap.className = "qdv-bucket-card-title-wrap";
+
+  const name = document.createElement("div");
+  name.className = "qdv-bucket-card-name";
+  name.textContent = bucket.title || bucket.keyword;
+
+  const capacity = document.createElement("div");
+  capacity.className = "qdv-bucket-card-capacity";
+  capacity.textContent = `ظرفیت ${formatBucketHours(summary.capacityHours)}`;
+
+  titleWrap.append(name, capacity);
+
+  const actions = document.createElement("div");
+  actions.className = "qdv-bucket-card-actions";
+
+  const edit = document.createElement("button");
+  edit.type = "button";
+  edit.className = "qdv-bucket-gear";
+  edit.dataset.bucketId = bucket.id;
+  edit.setAttribute("aria-label", "مدیریت باکت");
+  edit.title = "مدیریت باکت";
+  edit.appendChild(createGearIcon());
+  edit.addEventListener("click", () => {
+    courseBucketEditor = {
+      courseId: courseDelayState.courseId,
+      mode: "edit",
+      bucketId: bucket.id,
+      draft: createDelayBucketDraft(bucket),
+      adding: false,
+      needsInitialFocus: true,
+      returnFocus: { type: "bucket", bucketId: bucket.id }
+    };
+    renderDelayBucketPanel(courseDelayState);
+  });
+
+  actions.append(edit);
+  head.append(titleWrap, actions);
+  return head;
+}
+
+function createGearIcon() {
+  return createBucketIcon("gear", 16);
+}
+
+function createBucketIcon(name, size = 15) {
+  const svgNamespace = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(svgNamespace, "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("fill", "none");
+  svg.setAttribute("stroke-width", "2");
+  svg.setAttribute("stroke-linecap", "round");
+  svg.setAttribute("stroke-linejoin", "round");
+  svg.setAttribute("aria-hidden", "true");
+  svg.setAttribute("focusable", "false");
+  svg.style.width = `${size}px`;
+  svg.style.height = `${size}px`;
+
+  const icons = {
+    gear: [
+      ["path", { d: "M12 15.5A3.5 3.5 0 1 0 12 8a3.5 3.5 0 0 0 0 7.5Z" }],
+      ["path", { d: "M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V21a2 2 0 1 1-4 0v-.08A1.7 1.7 0 0 0 8.97 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1.03H3a2 2 0 1 1 0-4h.08A1.7 1.7 0 0 0 4.6 8.97a1.7 1.7 0 0 0-.34-1.88l-.06-.06A2 2 0 1 1 7.03 4.2l.06.06A1.7 1.7 0 0 0 8.97 4.6 1.7 1.7 0 0 0 10 3.04V3a2 2 0 1 1 4 0v.08A1.7 1.7 0 0 0 15.03 4.6a1.7 1.7 0 0 0 1.88-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 8.97 1.7 1.7 0 0 0 20.96 10H21a2 2 0 1 1 0 4h-.08A1.7 1.7 0 0 0 19.4 15Z" }]
+    ],
+    plus: [
+      ["path", { d: "M12 5v14" }],
+      ["path", { d: "M5 12h14" }]
+    ],
+    trash: [
+      ["path", { d: "M3 6h18" }],
+      ["path", { d: "M8 6V4h8v2" }],
+      ["path", { d: "M19 6l-1 14H6L5 6" }],
+      ["path", { d: "M10 11v5" }],
+      ["path", { d: "M14 11v5" }]
+    ],
+    x: [
+      ["path", { d: "M18 6 6 18" }],
+      ["path", { d: "m6 6 12 12" }]
+    ],
+    info: [
+      ["path", { d: "M12 17v-6" }],
+      ["path", { d: "M12 8h.01" }]
+    ]
+  };
+
+  (icons[name] || icons.x).forEach(([tagName, attributes]) => {
+    const element = document.createElementNS(svgNamespace, tagName);
+    Object.entries(attributes).forEach(([name, value]) => {
+      element.setAttribute(name, value);
+    });
+    svg.appendChild(element);
+  });
+
+  return svg;
+}
+
+function createDelayBucketProgress(summary) {
+  const progress = document.createElement("div");
+  progress.className = "qdv-bucket-progress";
+  progress.setAttribute("aria-hidden", "true");
+
+  const fill = document.createElement("div");
+  fill.className = "qdv-bucket-progress-fill";
+  const percent = summary.capacityHours > 0
+    ? Math.min(100, Math.max(0, (summary.usedHours / summary.capacityHours) * 100))
+    : summary.usedHours > 0
+      ? 100
+      : 0;
+  fill.style.width = `${percent}%`;
+
+  progress.appendChild(fill);
+  return progress;
+}
+
+function createDelayBucketMetrics(summary) {
+  const metrics = document.createElement("div");
+  metrics.className = "qdv-bucket-metrics";
+  metrics.append(
+    createDelayBucketMetric("مصرف‌شده", formatBucketHours(summary.usedHours)),
+    createDelayBucketMetric(
+      summary.remainingHours < 0 ? "بیش از ظرفیت" : "باقی‌مانده",
+      formatBucketHours(Math.abs(summary.remainingHours)),
+      summary.remainingHours < 0
+    )
+  );
+  return metrics;
+}
+
+function createDelayBucketMetric(label, value, over = false) {
+  const metric = document.createElement("div");
+  metric.className = "qdv-bucket-metric";
+
+  const labelElement = document.createElement("span");
+  labelElement.className = "qdv-bucket-metric-label";
+  labelElement.textContent = label;
+
+  const valueElement = document.createElement("span");
+  valueElement.className = "qdv-bucket-metric-value";
+  valueElement.classList.toggle("is-over", over);
+  valueElement.textContent = value;
+
+  metric.append(labelElement, valueElement);
+  return metric;
+}
+
+function createDelayBucketNote(summary, overlaps) {
+  const note = document.createElement("div");
+  note.className = "qdv-bucket-note";
+
+  if (summary.failedCount > 0) {
+    note.classList.add("has-error");
+    note.textContent = "دریافت تاخیر بعضی تمرین‌ها ناموفق بود؛ مجموع ممکن است ناقص باشد.";
+    return note;
+  }
+
+  if (summary.pendingCount > 0) {
+    note.textContent = "در انتظار دریافت تاخیر همه تمرین‌های این باکت.";
+    return note;
+  }
+
+  if (overlaps.length) {
+    note.classList.add("has-warning");
+    note.textContent = `${formatPersianNumber(overlaps.length)} تمرین در بیش از یک باکت شمرده می‌شود.`;
+    return note;
+  }
+
+  return document.createDocumentFragment();
+}
+
+function createDelayBucketMemberManager(courseDelayState, courseBuckets, bucket) {
+  const section = document.createElement("section");
+  section.className = "qdv-bucket-member-section";
+
+  const heading = document.createElement("div");
+  heading.className = "qdv-bucket-section-title";
+  heading.textContent = "تمرین‌های این باکت";
+
+  const summary = getDelayBucketSummary(courseDelayState, bucket);
+  const list = document.createElement("div");
+  list.className = "qdv-bucket-assignment-list";
+
+  if (summary.assignments.length) {
+    summary.assignments.forEach((assignment) => {
+      list.appendChild(createDelayBucketMemberRow(
+        courseDelayState,
+        bucket,
+        assignment,
+        summary.chargedHoursByAssignment.get(assignment.id)
+      ));
+    });
+  } else {
+    const empty = document.createElement("div");
+    empty.className = "qdv-bucket-note";
+    empty.textContent = "هنوز تمرینی در این باکت نیست.";
+    list.appendChild(empty);
+  }
+
+  const addButton = document.createElement("button");
+  addButton.type = "button";
+  addButton.className = "qdv-bucket-button is-subtle";
+  addButton.setAttribute("aria-label", "افزودن تمرین");
+  addButton.append(createBucketIcon("plus", 14), document.createTextNode("افزودن تمرین"));
+  addButton.addEventListener("click", () => {
+    captureDelayBucketEditor();
+    courseBucketEditor = {
+      ...(courseBucketEditor || {}),
+      courseId: courseDelayState.courseId,
+      mode: "edit",
+      bucketId: bucket.id,
+      adding: !courseBucketEditor?.adding
+    };
+    renderDelayBucketPanel(courseDelayState);
+  });
+
+  const top = document.createElement("div");
+  top.className = "qdv-bucket-member-head";
+  top.appendChild(heading);
+
+  const addButtonRow = document.createElement("div");
+  addButtonRow.className = "qdv-bucket-add-button-row";
+  addButtonRow.appendChild(addButton);
+
+  section.append(top, list, addButtonRow);
+
+  if (courseBucketEditor?.adding) {
+    section.appendChild(createDelayBucketAddList(courseDelayState, bucket));
+  }
+
+  return section;
+}
+
+function createDelayBucketMemberRow(courseDelayState, bucket, assignment, chargedHours) {
+  const row = document.createElement("div");
+  row.className = "qdv-bucket-assignment";
+
+  const textContainer = document.createElement("div");
+
+  const name = document.createElement("div");
+  name.className = "qdv-bucket-assignment-name";
+  name.textContent = assignment.name;
+
+  const meta = document.createElement("div");
+  meta.className = "qdv-bucket-assignment-meta";
+  meta.textContent = getDelayBucketAssignmentMeta(courseDelayState, assignment, chargedHours);
+
+  textContainer.append(name, meta);
+
+  const remove = document.createElement("button");
+  remove.type = "button";
+  remove.className = "qdv-bucket-icon-button is-danger";
+  remove.setAttribute("aria-label", "حذف از باکت");
+  remove.appendChild(createBucketIcon("trash"));
+  remove.addEventListener("click", async () => {
+    await setDelayBucketAssignmentMembership(courseDelayState.courseId, bucket, assignment, false);
+    await renderDelayBucketPanel(courseDelayState);
+  });
+
+  row.append(textContainer, remove);
+  return row;
+}
+
+function createDelayBucketAddList(courseDelayState, bucket) {
+  const wrapper = document.createElement("div");
+  wrapper.className = "qdv-bucket-add-list";
+
+  const availableAssignments = courseDelayState.assignments.filter((assignment) => {
+    return !isAssignmentInDelayBucket(bucket, assignment);
+  });
+
+  if (!availableAssignments.length) {
+    const empty = document.createElement("div");
+    empty.className = "qdv-bucket-note";
+    empty.textContent = "تمرین دیگری برای افزودن وجود ندارد.";
+    wrapper.appendChild(empty);
+    return wrapper;
+  }
+
+  availableAssignments.forEach((assignment) => {
+    const row = document.createElement("div");
+    row.className = "qdv-bucket-pick-row";
+
+    const name = document.createElement("div");
+    name.className = "qdv-bucket-assignment-name";
+    name.textContent = assignment.name;
+
+    const add = document.createElement("button");
+    add.type = "button";
+    add.className = "qdv-bucket-icon-button";
+    add.setAttribute("aria-label", "افزودن به باکت");
+    add.appendChild(createBucketIcon("plus"));
+    add.addEventListener("click", async () => {
+      await setDelayBucketAssignmentMembership(courseDelayState.courseId, bucket, assignment, true);
+      courseBucketEditor = {
+        ...(courseBucketEditor || {}),
+        adding: false
+      };
+      await renderDelayBucketPanel(courseDelayState);
+    });
+
+    row.append(name, add);
+    wrapper.appendChild(row);
+  });
+
+  return wrapper;
+}
+
+function getDelayBucketAssignmentMeta(courseDelayState, assignment, chargedHours) {
+  const status = courseDelayState.statusByAssignment.get(assignment.id);
+  const hasKnownDelay = courseDelayState.delaySecondsByAssignment.has(assignment.id);
+  if (status === COURSE_DELAY_STATUS.loading || courseDelayState.pendingAssignments.has(assignment.id)) {
+    if (hasKnownDelay) {
+      return `تاخیر ذخیره‌شده: ${formatBucketHours(chargedHours || 0)}؛ در صف به‌روزرسانی`;
+    }
+
+    return "در صف دریافت تاخیر";
+  }
+
+  if (status === COURSE_DELAY_STATUS.error) {
+    if (hasKnownDelay) {
+      return `تاخیر ذخیره‌شده: ${formatBucketHours(chargedHours || 0)}؛ به‌روزرسانی ناموفق`;
+    }
+
+    return "دریافت ناموفق";
+  }
+
+  if (!hasKnownDelay) {
+    return "تاخیر نامشخص";
+  }
+
+  return `تاخیر محاسبه‌شده: ${formatBucketHours(chargedHours || 0)}`;
+}
+
+async function setDelayBucketAssignmentMembership(courseId, bucket, assignment, included) {
+  await updateDelayBucketState((state) => {
+    const courseBuckets = getCourseDelayBucketState(state, courseId);
+    const target = courseBuckets.buckets.find((item) => item.id === bucket.id);
+    if (!target) {
+      return state;
+    }
+
+    const keywordMatches = doesAssignmentMatchDelayBucketKeyword(target, assignment);
+    if (included === keywordMatches) {
+      delete target.overrides[assignment.id];
+    } else {
+      target.overrides[assignment.id] = included ? "include" : "exclude";
+    }
+    target.updatedAt = Date.now();
+    return state;
+  });
+}
+
+function getDelayBucketSummary(courseDelayState, bucket) {
+  const includedAssignments = courseDelayState.assignments.filter((assignment) => {
+    return isAssignmentInDelayBucket(bucket, assignment);
+  });
+  const chargedHoursByAssignment = new Map();
+  let usedHours = 0;
+  let pendingCount = 0;
+  let failedCount = 0;
+
+  includedAssignments.forEach((assignment) => {
+    const hasKnownDelay = courseDelayState.delaySecondsByAssignment.has(assignment.id);
+    const status = courseDelayState.statusByAssignment.get(assignment.id);
+
+    if (courseDelayState.pendingAssignments.has(assignment.id)) {
+      pendingCount += 1;
+
+      if (!hasKnownDelay) {
+        chargedHoursByAssignment.set(assignment.id, 0);
+        return;
+      }
+    }
+
+    if (status === COURSE_DELAY_STATUS.error) {
+      failedCount += 1;
+
+      if (!hasKnownDelay) {
+        chargedHoursByAssignment.set(assignment.id, 0);
+        return;
+      }
+    }
+
+    const delaySeconds = courseDelayState.delaySecondsByAssignment.get(assignment.id) || 0;
+    const chargedHours = getDelayBucketChargedHours(delaySeconds, bucket.rounding);
+    chargedHoursByAssignment.set(assignment.id, chargedHours);
+    usedHours += chargedHours;
+  });
+
+  const capacityHours = Math.max(0, Number(bucket.capacityHours) || 0);
+  return {
+    assignments: includedAssignments,
+    chargedHoursByAssignment,
+    usedHours,
+    capacityHours,
+    remainingHours: capacityHours - usedHours,
+    pendingCount,
+    failedCount
+  };
+}
+
+function getDelayBucketChargedHours(delaySeconds, rounding) {
+  const safeSeconds = Math.max(0, Number(delaySeconds) || 0);
+  if (!safeSeconds) {
+    return 0;
+  }
+
+  if (rounding === "day") {
+    return Math.ceil(safeSeconds / 86400) * 24;
+  }
+
+  if (rounding === "none") {
+    return safeSeconds / 3600;
+  }
+
+  return Math.ceil(safeSeconds / 3600);
+}
+
+function getDelayBucketMembershipCounts(courseDelayState, courseBuckets) {
+  const counts = new Map();
+
+  courseBuckets.buckets.forEach((bucket) => {
+    courseDelayState.assignments.forEach((assignment) => {
+      if (!isAssignmentInDelayBucket(bucket, assignment)) {
+        return;
+      }
+
+      counts.set(assignment.id, (counts.get(assignment.id) || 0) + 1);
+    });
+  });
+
+  return counts;
+}
+
+function isAssignmentInDelayBucket(bucket, assignment) {
+  const override = bucket.overrides?.[assignment.id];
+  if (override === "include") {
+    return true;
+  }
+
+  if (override === "exclude") {
+    return false;
+  }
+
+  return doesAssignmentMatchDelayBucketKeyword(bucket, assignment);
+}
+
+function doesAssignmentMatchDelayBucketKeyword(bucket, assignment) {
+  const keyword = normalizeText(bucket.keyword || "").toLocaleLowerCase("fa-IR");
+  if (!keyword) {
+    return false;
+  }
+
+  return normalizeText(assignment.name || "")
+    .toLocaleLowerCase("fa-IR")
+    .includes(keyword);
+}
+
+function formatBucketHours(hours) {
+  return formatRoundedHours(Math.ceil(Math.max(0, Number(hours) || 0)));
 }
 
 function findCourseAssignmentsHeading() {
@@ -2166,8 +4263,15 @@ function findCourseAssignmentsHeading() {
 }
 
 function removeExistingCourseUi() {
+  if (delayBucketRenderTimer) {
+    clearTimeout(delayBucketRenderTimer);
+    delayBucketRenderTimer = null;
+  }
+
   document.getElementById(COURSE_TOTAL_ID)?.remove();
+  document.getElementById(COURSE_DELAY_BUCKET_PANEL_ID)?.remove();
   document.querySelectorAll(".qdv-course-delay").forEach((element) => element.remove());
+  courseBucketEditor = null;
 }
 
 function removeExistingCourseFollowUi() {
@@ -2245,7 +4349,9 @@ async function renderCourseFollowControls() {
   const state = await readCourseFollowState();
   const route = window.location.pathname;
   const cardCount = getCourseCardLinks().length;
-  const renderKey = `${route}:${JSON.stringify(state.overrides)}:${cardCount}`;
+  const expandedMenuId =
+    findExpandedCourseCardMenuButton()?.getAttribute("aria-controls") || "";
+  const renderKey = `${route}:${JSON.stringify(state.overrides)}:${cardCount}:${expandedMenuId}`;
 
   if (renderKey === lastCourseFollowRenderKey) {
     return;
