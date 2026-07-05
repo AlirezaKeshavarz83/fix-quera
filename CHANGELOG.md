@@ -2,6 +2,10 @@
 
 All notable changes to fix-quera are documented in this file.
 
+## v0.5.1 - 2026-07-04
+
+- Reduced route poll interval from 2s to 500ms for snappier SPA navigation detection.
+
 ## v0.5.0 - 2026-07-04
 
 - Added local per-course delay budget buckets in the `درسنامه‌ها` section.

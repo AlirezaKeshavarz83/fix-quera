@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Fix Quera",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "نمایش ددلاین، هارد ددلاین، میزان تأخیر، باکت‌های تأخیر و فیلتر ددلاین‌های درس‌ها در کوئرا.",
   "permissions": ["storage"],
   "browser_specific_settings": {
