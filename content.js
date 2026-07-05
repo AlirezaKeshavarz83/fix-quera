@@ -4995,7 +4995,7 @@ function installRouteChangeWatcher() {
           boot();
         }
       });
-    }, 2000);
+    }, 500);
   }
 }
 
