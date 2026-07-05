@@ -34,6 +34,7 @@ let courseRenderTimer = null;
 let courseObserver = null;
 let lastCourseAssignmentSignature = "";
 let delayBucketRenderTimer = null;
+let delayBucketStateReady = null;
 let lastBootRoute = "";
 let routePollTimer = null;
 let activeCourseRenderId = 0;
@@ -2492,21 +2493,33 @@ function normalizeDelayBucket(bucket, index = 0) {
 }
 
 async function readDelayBucketState() {
-  const values = await storageGet(COURSE_DELAY_BUCKETS_KEY);
-  return normalizeDelayBucketState(values?.[COURSE_DELAY_BUCKETS_KEY]);
+  if (!delayBucketStateReady) {
+    delayBucketStateReady = storageGet(COURSE_DELAY_BUCKETS_KEY)
+      .then((values) => normalizeDelayBucketState(values?.[COURSE_DELAY_BUCKETS_KEY]))
+      .catch((error) => {
+        if (isExtensionContextInvalidatedError(error)) {
+          return createEmptyDelayBucketState();
+        }
+        console.warn("[Deadline Viewer] delay bucket state read failed", error);
+        return createEmptyDelayBucketState();
+      });
+  }
+  return delayBucketStateReady;
 }
 
 async function writeDelayBucketState(state) {
-  await storageSet({
-    [COURSE_DELAY_BUCKETS_KEY]: normalizeDelayBucketState(state)
-  });
+  const normalized = normalizeDelayBucketState(state);
+  delayBucketStateReady = Promise.resolve(normalized);
+  await storageSet({ [COURSE_DELAY_BUCKETS_KEY]: normalized });
 }
 
 async function updateDelayBucketState(mutator) {
+  delayBucketStateReady = null;
   const state = await readDelayBucketState();
   const mutatedState = mutator(state);
-  await writeDelayBucketState(mutatedState || state);
-  return mutatedState || state;
+  const nextState = mutatedState || state;
+  await writeDelayBucketState(nextState);
+  return nextState;
 }
 
 function getCourseDelayBucketState(state, courseId) {
@@ -3882,8 +3895,8 @@ function createBucketIcon(name, size = 15) {
 
   (icons[name] || icons.x).forEach(([tagName, attributes]) => {
     const element = document.createElementNS(svgNamespace, tagName);
-    Object.entries(attributes).forEach(([name, value]) => {
-      element.setAttribute(name, value);
+    Object.entries(attributes).forEach(([attrName, attrValue]) => {
+      element.setAttribute(attrName, attrValue);
     });
     svg.appendChild(element);
   });
@@ -4513,8 +4526,8 @@ function createCourseFollowIcon(crossed = false) {
 
   elements.forEach(([tagName, attributes]) => {
     const element = document.createElementNS(svgNamespace, tagName);
-    Object.entries(attributes).forEach(([name, value]) => {
-      element.setAttribute(name, value);
+    Object.entries(attributes).forEach(([attrName, attrValue]) => {
+      element.setAttribute(attrName, attrValue);
     });
     svg.appendChild(element);
   });
