@@ -9,6 +9,11 @@ This repository contains a small WebExtension for improving Quera course and ass
 - Keep route-specific behavior gated by the current Quera URL. The manifest intentionally injects on `https://quera.org/*` so client-side navigation can be detected, but expensive work should stay limited to course and assignment pages.
 - Keep `manifest.json` permissions aligned with the real behavior of the extension. If storage, host access, or data handling changes, update `PRIVACY.md`, `README.md`, and store-review text together.
 
+## Visual Style
+
+- Follow `STYLE.md` when adding or changing extension UI. Mirror Quera's current light or dark theme, and match the older dense assignment-page shell when injecting into assignment problem, submission, or scoreboard pages.
+- Keep injected controls compact, border-led, teal/cyan-accented, and visually subordinate to Quera's native UI. Do not hardcode one theme, introduce large shadows, gradients, decorative imagery, oversized typography, or left-to-right spacing assumptions.
+
 ## Quera Page Data Findings
 
 - Use Chrome/browser inspection against real Quera pages before changing route-specific behavior. Quera is a Next/React app and page shape can change; do not infer data contracts from memory alone.

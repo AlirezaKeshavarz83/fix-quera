@@ -2,6 +2,15 @@
 
 All notable changes to fix-quera are documented in this file.
 
+## v0.5.2 - 2026-07-07
+
+- Refined extension UI to better match Quera's Chakra course pages and legacy assignment pages in light and dark themes.
+- Changed the assignment-page deadline bar to a compact two-row layout, collapsed identical deadline/hard-deadline values into one label, and prefixed earlier deadlines with Persian daypart labels.
+- Moved course assignment delay badges into the existing assignment metadata row with a vertical separator.
+- Reduced delay text visual weight in submission tables and course assignment cards.
+- Fixed course follow controls on client-side course navigation by preferring route and visible heading metadata over stale Next.js page data.
+- Added documented Quera UI style guidance for future extension changes.
+
 ## v0.5.1 - 2026-07-04
 
 - Reduced route poll interval from 2s to 500ms for snappier SPA navigation detection.
