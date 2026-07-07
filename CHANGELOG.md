@@ -2,6 +2,14 @@
 
 All notable changes to fix-quera are documented in this file.
 
+## v0.5.3 - 2026-07-07
+
+- Added local assignment done state and manual assignment delay overrides.
+- Made course assignment delay badges clickable and applied manual delay overrides to assignment badges, course totals, and delay buckets.
+- Added assignment-page controls for editing effective delay and marking an assignment done with an `انجام شد` checkbox.
+- Filtered done assignments out of Quera's upcoming-deadline widget.
+- Updated assignment delay labels to distinguish final-submission delay from manual delay.
+
 ## v0.5.2 - 2026-07-07
 
 - Refined extension UI to better match Quera's Chakra course pages and legacy assignment pages in light and dark themes.

@@ -8,6 +8,8 @@ For course pages, fix-quera stores a small cache only in the user's local browse
 
 For delay buckets, fix-quera stores local per-course bucket settings in the user's local browser extension storage. This may include Quera course IDs, bucket titles, bucket keywords, capacity values, rounding choices, assignment IDs, and manual assignment include/exclude choices.
 
+For assignment state, fix-quera stores local done choices and manual delay overrides in the user's local browser extension storage, with a same-device Quera-page storage mirror so the page-world filter can hide done assignments from Quera's upcoming-deadline widget before it renders. This may include Quera course IDs, assignment IDs, assignment names, done flags, override-active flags, override delay seconds, and update times.
+
 For course follow filtering, fix-quera stores local course follow choices and supporting course metadata in the user's local browser extension storage, with a same-device Quera-page storage mirror so the page-world filter can run before Quera renders or updates its deadline widget. This may include Quera course IDs, course names, archive-state flags, assignment-to-course mappings, and whether the user manually chose to follow or unfollow a course.
 
 This cached and preference data stays on the user's device. fix-quera does not send it to the developer, to any third-party service, or to any server controlled by fix-quera. fix-quera does not store this data anywhere outside the user's browser.
@@ -16,6 +18,6 @@ fix-quera does not use analytics, tracking, remote code, cookies, background ser
 
 Users can remove the locally stored cache by clearing the extension's site/extension data or uninstalling the extension.
 
-Removing extension/site data also removes local course follow choices and the page-storage mirror. After that reset, active courses are treated as followed and archived courses are treated as unfollowed again until the user manually toggles a course.
+Removing extension/site data also removes local course follow choices, assignment state, and page-storage mirrors. After that reset, active courses are treated as followed and archived courses are treated as unfollowed again until the user manually toggles a course.
 
 Contact: alirezakeshavarzhedayati@gmail.com

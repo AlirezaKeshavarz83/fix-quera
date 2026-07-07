@@ -12,13 +12,15 @@ Fix Quera is a browser extension that improves Quera course and assignment pages
 - Replaces Quera's `ضریب نمره` / `ضریب تاخیر` submission-table column with `میزان تاخیر`.
 - Adds a `میزان تاخیر` column when Quera does not provide one, computing delay from the assignment deadline and each submission timestamp.
 - Shows per-assignment final-submission delay badges on course pages.
+- Lets you click course-page delay badges to set or clear a manual delay override.
 - Shows `مجموع تاخیر` on course pages as the sum of displayed per-assignment delays.
 - Adds local per-course delay budget buckets in the `درسنامه‌ها` section.
 - Supports bucket keywords, manual assignment include/exclude choices, days+hours capacity, and per-bucket rounding by none/hour/day.
 - Shows bucket progress bars, used/remaining capacity, and warnings when assignments are counted in more than one bucket.
+- Adds assignment-page controls for effective delay editing and marking an assignment as done.
 - Adds local follow/unfollow controls for courses.
 - Shows a compact calendar-check indicator on followed course-list cards.
-- Filters Quera's upcoming-deadline widget to show only followed courses.
+- Filters Quera's upcoming-deadline widget to show only followed courses and assignments not marked done.
 - Defaults active courses to followed and archived courses to unfollowed until the user chooses otherwise.
 - Removing extension/site data resets local follow choices, so courses return to the active/archived defaults.
 - Caches course-page delay results for 10 minutes.
@@ -54,7 +56,7 @@ To load a local build:
 
 ## Permissions
 
-Fix Quera asks for access to Quera pages so it can read and improve the deadline/submission information shown there. It also uses browser extension storage for a local course-delay cache and local course delay-bucket settings.
+Fix Quera asks for access to Quera pages so it can read and improve the deadline/submission information shown there. It also uses browser extension storage for a local course-delay cache, local course delay-bucket settings, local assignment done state, and manual assignment delay overrides.
 
 - `manifest.json`
 - `content.js`

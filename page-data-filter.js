@@ -1,5 +1,6 @@
 (function () {
 const QDV_COURSE_FOLLOW_STATE_MIRROR_KEY = "qdv-course-follow-state-mirror:v1";
+const QDV_ASSIGNMENT_STATE_KEY = "qdv-assignment-state:v1";
 const QDV_DEBUG_KEY = "__qdvCourseFollowFilterDebug";
 
 (function installCourseFollowDataFilter() {
@@ -81,6 +82,53 @@ function readMirrorState() {
     );
   } catch {
     return createEmptyState();
+  }
+}
+
+function createEmptyAssignmentState() {
+  return {
+    version: 1,
+    assignments: {}
+  };
+}
+
+function normalizeAssignmentState(value) {
+  const state = createEmptyAssignmentState();
+
+  if (!value || typeof value !== "object") {
+    return state;
+  }
+
+  const assignments = value.assignments && typeof value.assignments === "object"
+    ? value.assignments
+    : {};
+
+  Object.entries(assignments).forEach(([assignmentId, assignment]) => {
+    if (!assignment || typeof assignment !== "object") {
+      return;
+    }
+
+    const id = String(assignment.assignmentId || assignmentId || "");
+    if (!id) {
+      return;
+    }
+
+    state.assignments[id] = {
+      assignmentId: id,
+      done: Boolean(assignment.done)
+    };
+  });
+
+  return state;
+}
+
+function readAssignmentMirrorState() {
+  try {
+    return normalizeAssignmentState(
+      JSON.parse(window.localStorage.getItem(QDV_ASSIGNMENT_STATE_KEY) || "null")
+    );
+  } catch {
+    return createEmptyAssignmentState();
   }
 }
 
@@ -206,8 +254,13 @@ function isCourseFollowed(state, courseId) {
   return true;
 }
 
-function shouldShowDeadline(deadline, state) {
+function shouldShowDeadline(deadline, state, assignmentState) {
   const assignmentId = String(deadline?.id || "");
+
+  if (assignmentId && assignmentState.assignments[assignmentId]?.done) {
+    return false;
+  }
+
   const mappedCourseId = state.assignments[assignmentId]?.courseId;
 
   if (mappedCourseId) {
@@ -270,6 +323,7 @@ function getCourseContainers(rootValue) {
 
 function filterDataPayload(data, debug, payloadType, url) {
   const state = readMirrorState();
+  const assignmentState = readAssignmentMirrorState();
   let changed = false;
 
   getCourseContainers(data).forEach((course) => {
@@ -281,7 +335,7 @@ function filterDataPayload(data, debug, payloadType, url) {
 
     const originalDeadlines = course.course_deadline_widget_data;
     const filteredDeadlines = originalDeadlines.filter((deadline) => {
-      return shouldShowDeadline(deadline, state);
+      return shouldShowDeadline(deadline, state, assignmentState);
     });
 
     debug.lastOriginalDeadlineCount = originalDeadlines.length;
