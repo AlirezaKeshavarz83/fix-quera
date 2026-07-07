@@ -153,6 +153,38 @@ function formatDate(date) {
   return `${valueByType.weekday} ${valueByType.day} ${valueByType.month}`;
 }
 
+function formatDeadlineDate(date) {
+  const daypart = getDeadlineDaypart(date);
+  const formattedDate = formatDate(date);
+  return daypart ? `${daypart} ${formattedDate}` : formattedDate;
+}
+
+function getDeadlineDaypart(date) {
+  const hour = Number(new Intl.DateTimeFormat("en-GB", {
+    hour: "2-digit",
+    hour12: false,
+    timeZone: TEHRAN_TIME_ZONE
+  }).format(date));
+
+  if (!Number.isFinite(hour) || hour >= 23) {
+    return "";
+  }
+
+  if (hour < 6) {
+    return "بامداد";
+  }
+
+  if (hour < 12) {
+    return "صبح";
+  }
+
+  if (hour < 18) {
+    return "ظهر";
+  }
+
+  return "عصر";
+}
+
 function formatHoverTime(date) {
   return new Intl.DateTimeFormat("en-GB", {
     hour: "2-digit",
@@ -218,14 +250,22 @@ function createDeadlineBar(result, detail) {
   inline.className = "qdv-inline";
 
   inline.appendChild(createStatusDot(result.status));
-  inline.appendChild(createDateItem("ددلاین", result.finishTime.date));
-  inline.appendChild(createDateItem("هارد ددلاین", result.hardFinishTime));
+  if (isSameTime(result.finishTime.date, result.hardFinishTime)) {
+    inline.appendChild(createDateItem("(هارد) ددلاین", result.finishTime.date));
+  } else {
+    inline.appendChild(createDateItem("ددلاین", result.finishTime.date));
+    inline.appendChild(createDateItem("هارد ددلاین", result.hardFinishTime));
+  }
 
   if (detail) {
     inline.appendChild(createDetailItem(detail));
   }
 
   return inline;
+}
+
+function isSameTime(firstDate, secondDate) {
+  return firstDate.getTime() === secondDate.getTime();
 }
 
 function createStatusDot(status) {
@@ -254,7 +294,7 @@ function createDateItem(label, date) {
   dateElement.dateTime = date.toISOString();
   dateElement.dataset.time = hoverTime;
   dateElement.title = hoverTime;
-  dateElement.textContent = formatDate(date);
+  dateElement.textContent = formatDeadlineDate(date);
 
   item.append(labelElement, dateElement);
   return item;
@@ -369,8 +409,8 @@ function injectStyles() {
     }
 
     #${BOX_ID} .qdv-status-dot {
-      width: 9px;
-      height: 9px;
+      width: 8px;
+      height: 8px;
       border-radius: 999px;
       background: currentColor;
       flex: 0 0 auto;
@@ -497,6 +537,44 @@ function injectStyles() {
       pointer-events: none;
     }
 
+    body:not(.chakra-ui-light):not(.chakra-ui-dark) #${BOX_ID} {
+      font-size: 11.7px;
+      line-height: 1.35;
+    }
+
+    body:not(.chakra-ui-light):not(.chakra-ui-dark) #${BOX_ID} .qdv-inline {
+      gap: 12px;
+    }
+
+    body:not(.chakra-ui-light):not(.chakra-ui-dark) #${BOX_ID} .qdv-status-dot {
+      width: 7px;
+      height: 7px;
+    }
+
+    body:not(.chakra-ui-light):not(.chakra-ui-dark) #${BOX_ID} .qdv-deadline {
+      flex-direction: column;
+      gap: 2px;
+      min-width: 74px;
+    }
+
+    body:not(.chakra-ui-light):not(.chakra-ui-dark) #${BOX_ID} .qdv-label {
+      font-size: 10.5px;
+      font-weight: 400;
+    }
+
+    body:not(.chakra-ui-light):not(.chakra-ui-dark) #${BOX_ID} .qdv-date,
+    body:not(.chakra-ui-light):not(.chakra-ui-dark) #${BOX_ID} .qdv-duration {
+      font-size: 11.7px;
+      font-weight: 500;
+    }
+
+    body:not(.chakra-ui-light):not(.chakra-ui-dark) #${BOX_ID} .qdv-warning {
+      width: 12px;
+      height: 12px;
+      margin-right: 2px;
+      font-size: 9px;
+    }
+
     @media (max-width: 768px) {
       #${BOX_ID}:not(.qdv-floating) {
         width: 100%;
@@ -532,14 +610,14 @@ function injectStyles() {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      min-width: 82px;
-      padding: 3px 8px;
+      min-width: 0;
+      padding: 0 2px;
       color: var(--colors-primary, #0076a6);
-      background: var(--colors-primary-hover-opaque, rgba(0, 168, 214, 0.07));
+      background: transparent;
       border-radius: 4px;
       font-family: inherit;
       font-size: 11px;
-      font-weight: 700;
+      font-weight: 600;
       direction: rtl;
       line-height: 1.4;
       text-align: center;
@@ -549,12 +627,12 @@ function injectStyles() {
     [data-theme="dark"] .qdv-delay,
     body.chakra-ui-dark .qdv-delay {
       color: #91def3;
-      background: rgba(145, 222, 243, 0.12);
+      background: transparent;
     }
 
     .qdv-course-delay {
       --qdv-primary: var(--colors-primary, #0076a6);
-      --qdv-primary-soft: var(--colors-primary-hover-opaque, rgba(0, 168, 214, 0.07));
+      --qdv-primary-soft: var(--colors-primary-hover-opaque, rgba(0, 168, 214, 0.045));
       --qdv-text: var(--chakra-colors-text-normal, #1a202c);
       --qdv-muted: var(--chakra-colors-text-pale, #718096);
       --qdv-border: var(--colors-border, var(--chakra-colors-border-gray, #e2e8f0));
@@ -571,7 +649,7 @@ function injectStyles() {
       border-radius: 4px;
       font-family: inherit;
       font-size: 10px;
-      font-weight: 700;
+      font-weight: 600;
       line-height: 1.4;
       direction: rtl;
       white-space: nowrap;
@@ -581,6 +659,22 @@ function injectStyles() {
       direction: rtl;
       font-family: inherit;
       font-variant-numeric: tabular-nums;
+    }
+
+    .qdv-assignment-delay {
+      gap: 3px;
+      margin-inline-start: 6px;
+      padding: 0 6px 0 0;
+      color: var(--qdv-muted);
+      background: transparent;
+      border: 0;
+      border-inline-start: 1px solid var(--qdv-border);
+      font-size: 10px;
+      font-weight: 500;
+    }
+
+    .qdv-assignment-delay:not(.is-zero):not(.is-loading):not(.is-stale):not(.is-error) {
+      color: var(--qdv-primary);
     }
 
     .qdv-course-delay.is-loading,
@@ -605,7 +699,7 @@ function injectStyles() {
     [data-theme="dark"] .qdv-course-delay,
     body.chakra-ui-dark .qdv-course-delay {
       --qdv-primary: #91def3;
-      --qdv-primary-soft: rgba(145, 222, 243, 0.12);
+      --qdv-primary-soft: rgba(145, 222, 243, 0.07);
       --qdv-text: #edf2f7;
       --qdv-muted: #a0aec0;
       --qdv-border: #2d3748;
@@ -621,16 +715,16 @@ function injectStyles() {
 
     .${COURSE_FOLLOW_BUTTON_CLASS} {
       --qdv-primary: var(--colors-primary, #0076a6);
-      --qdv-primary-soft: var(--colors-primary-hover-opaque, rgba(0, 168, 214, 0.07));
+      --qdv-primary-soft: var(--colors-primary-hover-opaque, rgba(0, 168, 214, 0.045));
       --qdv-text: var(--chakra-colors-text-normal, #1a202c);
       --qdv-border: var(--colors-border, var(--chakra-colors-border-gray, #e2e8f0));
       display: inline-flex;
       align-items: center;
       justify-content: center;
       width: fit-content;
-      min-height: 32px;
+      min-height: 31.5px;
       margin-top: 10px;
-      padding: 6px 12px;
+      padding: 5.25px 10.5px;
       color: var(--qdv-primary);
       background: var(--qdv-primary-soft);
       border: 1px solid transparent;
@@ -638,7 +732,7 @@ function injectStyles() {
       cursor: pointer;
       font-family: inherit;
       font-size: 12px;
-      font-weight: 700;
+      font-weight: 500;
       line-height: 1.5;
       white-space: nowrap;
     }
@@ -658,10 +752,10 @@ function injectStyles() {
     .${COURSE_FOLLOW_MENUITEM_CLASS} {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 6px;
       width: 100%;
-      min-height: 32px;
-      padding: 6px 12px;
+      min-height: 31.5px;
+      padding: 5.25px 10.5px;
       color: inherit;
       background: transparent;
       border: 0;
@@ -676,26 +770,31 @@ function injectStyles() {
       align-items: center;
       justify-content: center;
       flex: 0 0 auto;
-      width: 18px;
-      height: 18px;
-      color: var(--colors-primary, #0076a6);
+      width: 16px;
+      height: 16px;
+      color: var(--chakra-colors-text-pale, #718096);
     }
 
     .${COURSE_FOLLOW_MENUITEM_CLASS}.is-unfollow-action .qdv-course-follow-menuicon {
-      color: #c2410c;
+      color: var(--chakra-colors-text-pale, #718096);
     }
 
     .${COURSE_FOLLOW_MENUITEM_CLASS} .qdv-course-follow-menuicon svg {
       display: block;
-      width: 16px;
-      height: 16px;
+      width: 15px;
+      height: 15px;
       stroke: currentColor;
     }
 
     .${COURSE_FOLLOW_MENUITEM_CLASS}:hover,
     .${COURSE_FOLLOW_MENUITEM_CLASS}:focus {
-      background: var(--chakra-colors-blackAlpha-100, rgba(0, 0, 0, 0.06));
+      background: var(--chakra-colors-blackAlpha-100, rgba(255, 255, 255, 0.06));
       outline: none;
+    }
+
+    .${COURSE_FOLLOW_MENUITEM_CLASS}:hover .qdv-course-follow-menuicon,
+    .${COURSE_FOLLOW_MENUITEM_CLASS}:focus .qdv-course-follow-menuicon {
+      color: var(--colors-primary, #0076a6);
     }
 
     .${COURSE_FOLLOW_INDICATOR_CLASS} {
@@ -708,7 +807,7 @@ function injectStyles() {
       width: 22px;
       height: 22px;
       margin-inline-end: 3px;
-      color: var(--qdv-primary);
+      color: var(--chakra-colors-text-pale, #718096);
       cursor: help;
       isolation: isolate;
       vertical-align: middle;
@@ -717,8 +816,8 @@ function injectStyles() {
 
     .${COURSE_FOLLOW_INDICATOR_CLASS} svg {
       display: block;
-      width: 15px;
-      height: 15px;
+      width: 14px;
+      height: 14px;
       stroke: currentColor;
     }
 
@@ -744,20 +843,21 @@ function injectStyles() {
       content: attr(aria-label);
       inset-inline-end: 0;
       inset-block-end: calc(100% + 11px);
-      width: 310px;
+      width: max-content;
+      max-width: 260px;
       padding: 7px 9px;
       color: #ffffff;
       background-color: var(--qdv-tooltip-bg);
       border-radius: 4px;
       box-sizing: border-box;
-      box-shadow: 0 8px 24px rgba(15, 23, 42, 0.35);
+      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.24);
       direction: rtl;
       font-family: inherit;
       font-size: 12px;
       font-weight: 500;
       line-height: 1.4;
       text-align: right;
-      white-space: nowrap;
+      white-space: normal;
     }
 
     .${COURSE_FOLLOW_INDICATOR_CLASS}:hover::before,
@@ -766,11 +866,16 @@ function injectStyles() {
       transform: translateY(0);
     }
 
+    .${COURSE_FOLLOW_INDICATOR_CLASS}:hover,
+    .${COURSE_FOLLOW_INDICATOR_CLASS}:focus {
+      color: var(--qdv-primary);
+    }
+
     html[data-theme="dark"] .${COURSE_FOLLOW_BUTTON_CLASS},
     [data-theme="dark"] .${COURSE_FOLLOW_BUTTON_CLASS},
     body.chakra-ui-dark .${COURSE_FOLLOW_BUTTON_CLASS} {
       --qdv-primary: #91def3;
-      --qdv-primary-soft: rgba(145, 222, 243, 0.12);
+      --qdv-primary-soft: rgba(145, 222, 243, 0.07);
       --qdv-text: #edf2f7;
       --qdv-border: #2d3748;
     }
@@ -779,11 +884,36 @@ function injectStyles() {
     [data-theme="dark"] .${COURSE_FOLLOW_INDICATOR_CLASS},
     body.chakra-ui-dark .${COURSE_FOLLOW_INDICATOR_CLASS} {
       --qdv-primary: #91def3;
+      color: #a0aec0;
+    }
+
+    html[data-theme="dark"] .${COURSE_FOLLOW_MENUITEM_CLASS}:hover,
+    [data-theme="dark"] .${COURSE_FOLLOW_MENUITEM_CLASS}:hover,
+    body.chakra-ui-dark .${COURSE_FOLLOW_MENUITEM_CLASS}:hover,
+    html[data-theme="dark"] .${COURSE_FOLLOW_MENUITEM_CLASS}:focus,
+    [data-theme="dark"] .${COURSE_FOLLOW_MENUITEM_CLASS}:focus,
+    body.chakra-ui-dark .${COURSE_FOLLOW_MENUITEM_CLASS}:focus {
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    html[data-theme="dark"] .${COURSE_FOLLOW_MENUITEM_CLASS}:hover .qdv-course-follow-menuicon,
+    [data-theme="dark"] .${COURSE_FOLLOW_MENUITEM_CLASS}:hover .qdv-course-follow-menuicon,
+    body.chakra-ui-dark .${COURSE_FOLLOW_MENUITEM_CLASS}:hover .qdv-course-follow-menuicon,
+    html[data-theme="dark"] .${COURSE_FOLLOW_MENUITEM_CLASS}:focus .qdv-course-follow-menuicon,
+    [data-theme="dark"] .${COURSE_FOLLOW_MENUITEM_CLASS}:focus .qdv-course-follow-menuicon,
+    body.chakra-ui-dark .${COURSE_FOLLOW_MENUITEM_CLASS}:focus .qdv-course-follow-menuicon,
+    html[data-theme="dark"] .${COURSE_FOLLOW_INDICATOR_CLASS}:hover,
+    [data-theme="dark"] .${COURSE_FOLLOW_INDICATOR_CLASS}:hover,
+    body.chakra-ui-dark .${COURSE_FOLLOW_INDICATOR_CLASS}:hover,
+    html[data-theme="dark"] .${COURSE_FOLLOW_INDICATOR_CLASS}:focus,
+    [data-theme="dark"] .${COURSE_FOLLOW_INDICATOR_CLASS}:focus,
+    body.chakra-ui-dark .${COURSE_FOLLOW_INDICATOR_CLASS}:focus {
+      color: #91def3;
     }
 
     #${COURSE_DELAY_BUCKET_PANEL_ID} {
       --qdv-primary: var(--colors-primary, #0076a6);
-      --qdv-primary-soft: var(--colors-primary-hover-opaque, rgba(0, 168, 214, 0.07));
+      --qdv-primary-soft: var(--colors-primary-hover-opaque, rgba(0, 168, 214, 0.045));
       --qdv-text: var(--chakra-colors-text-normal, #1a202c);
       --qdv-muted: var(--chakra-colors-text-pale, #718096);
       --qdv-border: var(--colors-border, var(--chakra-colors-border-gray, #e2e8f0));
@@ -821,17 +951,17 @@ function injectStyles() {
     #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-title {
       color: var(--qdv-text);
       font-size: 13px;
-      font-weight: 800;
+      font-weight: 600;
       line-height: 1.5;
     }
 
     #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-empty {
       margin: 0;
-      padding: 10px 12px;
+      padding: 8px 0;
       color: var(--qdv-muted);
-      background: var(--qdv-primary-soft);
-      border: 1px dashed var(--qdv-border);
-      border-radius: 6px;
+      background: transparent;
+      border: 0;
+      border-radius: 0;
       font-size: 12px;
       line-height: 1.7;
     }
@@ -843,17 +973,17 @@ function injectStyles() {
     }
 
     #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-card {
-      padding: 12px;
+      padding: 10px;
       background: transparent;
       border: 1px solid var(--qdv-border);
-      border-radius: 8px;
+      border-radius: 6px;
     }
 
     #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-form {
-      padding: 12px;
+      padding: 10px;
       background: var(--qdv-surface);
       border: 1px solid var(--qdv-border);
-      border-radius: 8px;
+      border-radius: 6px;
     }
 
     #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-card.is-over {
@@ -882,7 +1012,7 @@ function injectStyles() {
       min-width: 0;
       color: var(--qdv-text);
       font-size: 13px;
-      font-weight: 800;
+      font-weight: 600;
       line-height: 1.6;
     }
 
@@ -897,7 +1027,7 @@ function injectStyles() {
       flex: 0 0 auto;
       color: var(--qdv-muted);
       font-size: 10px;
-      font-weight: 700;
+      font-weight: 500;
       line-height: 1.5;
       white-space: nowrap;
     }
@@ -953,7 +1083,7 @@ function injectStyles() {
     #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-metric-value {
       color: var(--qdv-text);
       font-size: 12px;
-      font-weight: 800;
+      font-weight: 600;
       line-height: 1.5;
       font-variant-numeric: tabular-nums;
     }
@@ -975,18 +1105,19 @@ function injectStyles() {
       min-height: 30px;
       padding: 5px 10px;
       color: var(--qdv-primary);
-      background: var(--qdv-primary-soft);
-      border: 1px solid transparent;
+      background: transparent;
+      border: 1px solid var(--qdv-border);
       border-radius: 6px;
       cursor: pointer;
       font-size: 12px;
-      font-weight: 800;
+      font-weight: 500;
       line-height: 1.5;
       white-space: nowrap;
     }
 
     #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-button:hover,
     #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-button:focus {
+      background: var(--qdv-primary-soft);
       border-color: var(--qdv-primary);
       outline: none;
     }
@@ -1064,7 +1195,7 @@ function injectStyles() {
 
     .qdv-bucket-modal {
       --qdv-primary: var(--colors-primary, #0076a6);
-      --qdv-primary-soft: var(--colors-primary-hover-opaque, rgba(0, 168, 214, 0.07));
+      --qdv-primary-soft: var(--colors-primary-hover-opaque, rgba(0, 168, 214, 0.045));
       --qdv-primary-softer: rgba(0, 168, 214, 0.04);
       --qdv-text: var(--chakra-colors-text-normal, #1a202c);
       --qdv-muted: var(--chakra-colors-text-pale, #718096);
@@ -1080,7 +1211,7 @@ function injectStyles() {
       justify-content: center;
       padding: 18px;
       color: var(--qdv-text);
-      background: rgba(15, 23, 42, 0.52);
+      background: rgba(15, 23, 42, 0.44);
       direction: rtl;
       font-family: inherit;
     }
@@ -1093,8 +1224,8 @@ function injectStyles() {
       overflow: hidden;
       background: var(--qdv-surface-raised);
       border: 1px solid var(--qdv-border);
-      border-radius: 8px;
-      box-shadow: 0 20px 50px rgba(15, 23, 42, 0.32);
+      border-radius: 6px;
+      box-shadow: 0 10px 30px rgba(15, 23, 42, 0.24);
     }
 
     .qdv-bucket-modal-head,
@@ -1128,7 +1259,7 @@ function injectStyles() {
     .qdv-bucket-modal-title {
       color: var(--qdv-text);
       font-size: 13px;
-      font-weight: 800;
+      font-weight: 600;
       line-height: 1.5;
     }
 
@@ -1166,7 +1297,7 @@ function injectStyles() {
     .qdv-bucket-modal .qdv-bucket-capacity-title {
       color: var(--qdv-text);
       font-size: 11px;
-      font-weight: 800;
+      font-weight: 600;
       line-height: 1.5;
     }
 
@@ -1179,7 +1310,7 @@ function injectStyles() {
     .qdv-bucket-modal .qdv-bucket-section-title {
       color: var(--qdv-text);
       font-size: 12px;
-      font-weight: 800;
+      font-weight: 600;
       line-height: 1.6;
     }
 
@@ -1256,10 +1387,10 @@ function injectStyles() {
       color: var(--qdv-primary);
       background: transparent;
       border: 1px solid transparent;
-      border-radius: 6px;
+      border-radius: 5.25px;
       cursor: pointer;
       font-size: 18px;
-      font-weight: 800;
+      font-weight: 600;
       line-height: 1;
     }
 
@@ -1294,7 +1425,7 @@ function injectStyles() {
       gap: 8px;
       color: var(--qdv-text);
       font-size: 12px;
-      font-weight: 700;
+      font-weight: 500;
       white-space: nowrap;
     }
 
@@ -1330,21 +1461,21 @@ function injectStyles() {
     .qdv-bucket-modal .qdv-bucket-field label {
       color: var(--qdv-text);
       font-size: 11px;
-      font-weight: 800;
+      font-weight: 600;
       line-height: 1.5;
     }
 
     .qdv-bucket-modal .qdv-bucket-field input,
     .qdv-bucket-modal .qdv-bucket-field select {
       min-width: 0;
-      min-height: 34px;
-      padding: 6px 9px;
+      min-height: 42px;
+      padding: 0 14px;
       color: var(--qdv-text);
       background: var(--qdv-surface);
       border: 1px solid var(--qdv-border);
-      border-radius: 6px;
+      border-radius: 5.25px;
       direction: rtl;
-      font-size: 12px;
+      font-size: 14px;
       line-height: 1.5;
     }
 
@@ -1398,15 +1529,15 @@ function injectStyles() {
       align-items: center;
       justify-content: center;
       gap: 6px;
-      min-height: 30px;
-      padding: 5px 10px;
+      min-height: 35px;
+      padding: 0 14px;
       color: #ffffff;
       background: var(--qdv-primary);
       border: 1px solid transparent;
-      border-radius: 6px;
+      border-radius: 5.25px;
       cursor: pointer;
-      font-size: 12px;
-      font-weight: 800;
+      font-size: 14px;
+      font-weight: 500;
       line-height: 1.5;
       white-space: nowrap;
     }
@@ -1450,8 +1581,8 @@ function injectStyles() {
     [data-theme="dark"] .qdv-bucket-modal,
     body.chakra-ui-dark .qdv-bucket-modal {
       --qdv-primary: #91def3;
-      --qdv-primary-soft: rgba(145, 222, 243, 0.12);
-      --qdv-primary-softer: rgba(145, 222, 243, 0.06);
+      --qdv-primary-soft: rgba(145, 222, 243, 0.07);
+      --qdv-primary-softer: rgba(145, 222, 243, 0.04);
       --qdv-text: #edf2f7;
       --qdv-muted: #a0aec0;
       --qdv-border: #2d3748;
@@ -2909,7 +3040,8 @@ function insertAssignmentDelayBadge(assignment, status, value) {
   }
 
   const badge = getOrCreateAssignmentDelayBadge(assignment);
-  badge.className = `qdv-course-delay is-${status}`;
+  badge.className = `qdv-course-delay qdv-assignment-delay is-${status}`;
+  badge.classList.toggle("is-zero", isZeroRoundedDelayValue(value));
   badge.title = getAssignmentDelayTitle(status);
   badge.replaceChildren(
     document.createTextNode("تاخیر"),
@@ -2926,39 +3058,38 @@ function getOrCreateAssignmentDelayBadge(assignment) {
     `.qdv-course-delay[data-assignment-id="${escapeCssIdent(assignment.id)}"]`
   );
 
-  if (badge) {
-    return badge;
+  const metadataContainer = findAssignmentMetadataContainer(assignment.card);
+
+  if (!badge) {
+    badge = document.createElement("span");
+    badge.className = "qdv-course-delay qdv-assignment-delay";
+    badge.dataset.assignmentId = assignment.id;
   }
 
-  badge = document.createElement("span");
-  badge.className = "qdv-course-delay";
-  badge.dataset.assignmentId = assignment.id;
-
-  const metadataContainer = findAssignmentMetadataContainer(assignment.card);
-  metadataContainer.appendChild(badge);
+  if (badge.parentElement !== metadataContainer) {
+    metadataContainer.appendChild(badge);
+  }
 
   return badge;
+}
+
+function isZeroRoundedDelayValue(value) {
+  return /^۰\s*ساعت$|^0\s*ساعت$/.test(normalizeText(value || ""));
 }
 
 function findAssignmentMetadataContainer(card) {
   // Put the course delay badge into Quera's existing metadata row so cards do
   // not gain an extra visual line.
-  const directStack = Array.from(card.children).find((element) => {
-    return (
-      element.classList?.contains("chakra-stack") &&
-      normalizeText(element.textContent || "").includes("مهلت")
-    );
-  });
-
-  if (directStack) {
-    return directStack;
-  }
-
-  return (
-    Array.from(card.querySelectorAll(".chakra-stack")).find((element) => {
+  const metadataCandidates = Array.from(card.querySelectorAll(".chakra-stack"))
+    .filter((element) => {
       return normalizeText(element.textContent || "").includes("مهلت");
-    }) || card
-  );
+    });
+
+  return metadataCandidates.find((element) => {
+    return !Array.from(element.children).some((child) => {
+      return normalizeText(child.textContent || "").includes("مهلت");
+    });
+  }) || metadataCandidates[metadataCandidates.length - 1] || card;
 }
 
 function escapeCssIdent(value) {
@@ -4369,7 +4500,6 @@ async function renderCourseFollowControls() {
   if (renderKey === lastCourseFollowRenderKey) {
     return;
   }
-  lastCourseFollowRenderKey = renderKey;
 
   injectStyles();
 
@@ -4379,25 +4509,33 @@ async function renderCourseFollowControls() {
   }
 
   if (isCoursePage()) {
-    await renderCoursePageFollowButton();
+    if (await renderCoursePageFollowButton()) {
+      lastCourseFollowRenderKey = renderKey;
+    }
     return;
   }
 
   if (isCourseListPage()) {
     await renderCourseListFollowIndicators();
     await renderCourseListFollowMenuItem();
+    lastCourseFollowRenderKey = renderKey;
   }
 }
 
 async function renderCoursePageFollowButton() {
   const course = getCurrentCourseMetadata();
   if (!course?.id) {
-    return;
+    return false;
   }
 
   const state = await readCourseFollowState();
   const followed = isCourseFollowedInState(state, course.id);
   let button = document.querySelector(`.${COURSE_FOLLOW_BUTTON_CLASS}`);
+  const container = findCourseFollowButtonContainer(course.name);
+
+  if (!container) {
+    return false;
+  }
 
   if (!button) {
     button = document.createElement("button");
@@ -4410,12 +4548,14 @@ async function renderCoursePageFollowButton() {
       await setCourseFollowOverride(course, !latestFollowed);
       await renderCoursePageFollowButton();
     });
+  }
 
-    const container = findCourseFollowButtonContainer(course.name);
-    container?.appendChild(button);
+  if (container && button.parentElement !== container) {
+    container.appendChild(button);
   }
 
   updateCourseFollowButton(button, followed);
+  return true;
 }
 
 function updateCourseFollowButton(button, followed) {
@@ -4435,7 +4575,7 @@ function findCourseFollowButtonContainer(courseName) {
   return (
     heading?.closest(".chakra-stack")?.parentElement ||
     heading?.parentElement ||
-    document.querySelector("main")
+    null
   );
 }
 
@@ -4671,14 +4811,20 @@ function getCourseIdFromLink(link) {
 
 function getCurrentCourseMetadata() {
   const nextCourse = getNextDataCourse();
-  const courseId = getCourseId() || nextCourse?.id;
-  const name = nextCourse?.name || getCourseName();
+  const nextCourseId = String(nextCourse?.id || "");
+  const courseId = getCourseId() || nextCourseId;
+  const nextCourseMatchesRoute = nextCourseId === courseId;
+  const name = getCourseName() || (nextCourseMatchesRoute ? nextCourse?.name : "");
 
   return normalizeCourseMetadata({
     id: courseId,
     name,
-    isArchived: nextCourse?.is_archived ?? nextCourse?.isArchived,
-    archivedBy: nextCourse?.archived_by || nextCourse?.archivedBy || null
+    isArchived: nextCourseMatchesRoute
+      ? nextCourse?.is_archived ?? nextCourse?.isArchived
+      : undefined,
+    archivedBy: nextCourseMatchesRoute
+      ? nextCourse?.archived_by || nextCourse?.archivedBy || null
+      : null
   });
 }
 
