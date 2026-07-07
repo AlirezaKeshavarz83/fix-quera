@@ -8,9 +8,11 @@ const COURSE_DELAY_BUCKETS_KEY = "qdv-course-delay-buckets:v1";
 const COURSE_DELAY_BUCKET_PANEL_ID = "deadline-viewer-delay-buckets";
 const COURSE_FOLLOW_STATE_KEY = "qdv-course-follow-state:v1";
 const COURSE_FOLLOW_STATE_MIRROR_KEY = "qdv-course-follow-state-mirror:v1";
+const ASSIGNMENT_STATE_KEY = "qdv-assignment-state:v1";
 const COURSE_FOLLOW_BUTTON_CLASS = "qdv-course-follow-button";
 const COURSE_FOLLOW_MENUITEM_CLASS = "qdv-course-follow-menuitem";
 const COURSE_FOLLOW_INDICATOR_CLASS = "qdv-course-follow-indicator";
+const ASSIGNMENT_SIDEBAR_PANEL_ID = "qdv-assignment-sidebar-state";
 const CACHE_TTL_HARD_DEADLINE_MS = 3 * 24 * 60 * 60 * 1000;
 const CACHE_TTL_ACTIVE_COURSE_MS = 60 * 60 * 1000;
 const CACHE_TTL_ACTIVE_ASSIGNMENT_MS = 5 * 60 * 1000;
@@ -40,6 +42,8 @@ let routePollTimer = null;
 let activeCourseRenderId = 0;
 let courseFollowStateCache = null;
 let courseFollowStateReady = null;
+let assignmentStateCache = null;
+let assignmentStateReady = null;
 let courseFollowObserver = null;
 let courseFollowRenderTimer = null;
 let lastCourseFollowRenderKey = "";
@@ -655,6 +659,16 @@ function injectStyles() {
       white-space: nowrap;
     }
 
+    button.qdv-course-delay {
+      cursor: pointer;
+    }
+
+    button.qdv-course-delay:hover,
+    button.qdv-course-delay:focus {
+      border-color: var(--qdv-primary);
+      outline: none;
+    }
+
     .qdv-course-delay-value {
       direction: rtl;
       font-family: inherit;
@@ -675,6 +689,10 @@ function injectStyles() {
 
     .qdv-assignment-delay:not(.is-zero):not(.is-loading):not(.is-stale):not(.is-error) {
       color: var(--qdv-primary);
+    }
+
+    .qdv-assignment-delay.has-override {
+      border-color: var(--qdv-primary);
     }
 
     .qdv-course-delay.is-loading,
@@ -711,6 +729,237 @@ function injectStyles() {
       color: #feb2b2;
       background: rgba(254, 178, 178, 0.12);
       border-color: rgba(254, 178, 178, 0.18);
+    }
+
+    .qdv-assignment-delay-modal {
+      --qdv-primary: var(--colors-primary, #0076a6);
+      --qdv-primary-soft: var(--colors-primary-hover-opaque, rgba(0, 168, 214, 0.07));
+      --qdv-surface: var(--chakra-colors-bg-pale, #ffffff);
+      --qdv-muted-surface: var(--chakra-colors-bg-muted, #f7fafc);
+      --qdv-text: var(--chakra-colors-text-normal, #1a202c);
+      --qdv-muted: var(--chakra-colors-text-pale, #718096);
+      --qdv-border: var(--colors-border, var(--chakra-colors-border-gray, #e2e8f0));
+      position: fixed;
+      inset: 0;
+      z-index: 2147483647;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      color: var(--qdv-text);
+      background: rgba(0, 0, 0, 0.22);
+      direction: rtl;
+      font-family: inherit;
+    }
+
+    .qdv-assignment-delay-dialog {
+      width: min(360px, 100%);
+      padding: 14px;
+      background: var(--qdv-surface);
+      border: 1px solid var(--qdv-border);
+      border-radius: 6px;
+      box-shadow: 0 8px 24px rgba(26, 32, 44, 0.18);
+    }
+
+    .qdv-assignment-delay-head,
+    .qdv-assignment-delay-fields,
+    .qdv-assignment-delay-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .qdv-assignment-delay-head {
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    .qdv-assignment-delay-title {
+      min-width: 0;
+      margin: 0;
+      color: var(--qdv-text);
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 1.6;
+    }
+
+    .qdv-assignment-delay-fields {
+      align-items: stretch;
+      margin-bottom: 14px;
+    }
+
+    .qdv-assignment-delay-field {
+      display: flex;
+      flex: 1 1 0;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 0;
+      color: var(--qdv-muted);
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .qdv-assignment-delay-field input {
+      width: 100%;
+      min-height: 35px;
+      padding: 4px 8px;
+      color: var(--qdv-text);
+      background: var(--qdv-muted-surface);
+      border: 1px solid var(--qdv-border);
+      border-radius: 4px;
+      font: inherit;
+      font-size: 13px;
+      font-variant-numeric: tabular-nums;
+      direction: ltr;
+      text-align: center;
+    }
+
+    .qdv-assignment-delay-field input:focus {
+      border-color: var(--qdv-primary);
+      outline: 2px solid var(--qdv-primary-soft);
+      outline-offset: 1px;
+    }
+
+    .qdv-assignment-delay-actions {
+      justify-content: flex-end;
+      flex-wrap: wrap;
+    }
+
+    .qdv-assignment-delay-button,
+    .qdv-assignment-delay-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--qdv-primary);
+      background: var(--qdv-primary-soft);
+      border: 1px solid transparent;
+      border-radius: 4px;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1.4;
+    }
+
+    .qdv-assignment-delay-button {
+      min-height: 32px;
+      padding: 5px 10px;
+    }
+
+    .qdv-assignment-delay-icon {
+      width: 28px;
+      height: 28px;
+      padding: 0;
+    }
+
+    .qdv-assignment-delay-button:hover,
+    .qdv-assignment-delay-button:focus,
+    .qdv-assignment-delay-icon:hover,
+    .qdv-assignment-delay-icon:focus {
+      border-color: var(--qdv-primary);
+      outline: none;
+    }
+
+    .qdv-assignment-delay-button.is-subtle,
+    .qdv-assignment-delay-icon {
+      color: var(--qdv-muted);
+      background: transparent;
+      border-color: var(--qdv-border);
+    }
+
+    .qdv-assignment-delay-button.is-danger {
+      color: #dc4040;
+      background: rgba(220, 64, 64, 0.08);
+      border-color: rgba(220, 64, 64, 0.16);
+    }
+
+    .qdv-assignment-delay-icon svg {
+      width: 15px;
+      height: 15px;
+      stroke: currentColor;
+    }
+
+    #${ASSIGNMENT_SIDEBAR_PANEL_ID} {
+      --qdv-primary: var(--colors-primary, #0076a6);
+      --qdv-primary-soft: var(--colors-primary-hover-opaque, rgba(0, 168, 214, 0.07));
+      --qdv-surface: #ffffff;
+      --qdv-muted-surface: #f9f9f9;
+      --qdv-text: #323232;
+      --qdv-muted: rgba(0, 0, 0, 0.55);
+      --qdv-border: rgba(34, 36, 38, 0.15);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 8px;
+      border-top: 1px solid var(--qdv-border);
+      direction: rtl;
+      font-family: inherit;
+    }
+
+    #${ASSIGNMENT_SIDEBAR_PANEL_ID} .qdv-sidebar-delay,
+    #${ASSIGNMENT_SIDEBAR_PANEL_ID} .qdv-sidebar-done {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      width: 100%;
+      border-radius: 4px;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    #${ASSIGNMENT_SIDEBAR_PANEL_ID} .qdv-sidebar-delay {
+      padding: 7px 8px;
+      color: var(--qdv-text);
+      background: var(--qdv-muted-surface);
+      border: 1px solid var(--qdv-border);
+    }
+
+    #${ASSIGNMENT_SIDEBAR_PANEL_ID} .qdv-sidebar-delay-label {
+      color: var(--qdv-muted);
+      font-weight: 500;
+    }
+
+    #${ASSIGNMENT_SIDEBAR_PANEL_ID} .qdv-sidebar-delay-value {
+      color: var(--qdv-primary);
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+
+    #${ASSIGNMENT_SIDEBAR_PANEL_ID} .qdv-sidebar-done {
+      min-height: 38px;
+      justify-content: center;
+      color: var(--qdv-primary);
+      background: var(--qdv-primary-soft);
+      border: 1px solid var(--qdv-primary);
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 700;
+      padding: 7px 9px;
+    }
+
+    #${ASSIGNMENT_SIDEBAR_PANEL_ID} .qdv-sidebar-done input {
+      flex: 0 0 auto;
+      width: 16px;
+      height: 16px;
+      margin: 0;
+      accent-color: var(--qdv-primary);
+    }
+
+    html[data-theme="dark"] .qdv-assignment-delay-modal,
+    [data-theme="dark"] .qdv-assignment-delay-modal,
+    body.chakra-ui-dark .qdv-assignment-delay-modal,
+    html[data-theme="dark"] #${ASSIGNMENT_SIDEBAR_PANEL_ID},
+    [data-theme="dark"] #${ASSIGNMENT_SIDEBAR_PANEL_ID},
+    body.chakra-ui-dark #${ASSIGNMENT_SIDEBAR_PANEL_ID} {
+      --qdv-primary: #91def3;
+      --qdv-primary-soft: rgba(145, 222, 243, 0.12);
+      --qdv-surface: #1b1d26;
+      --qdv-muted-surface: #1e202a;
+      --qdv-text: rgba(255, 255, 255, 0.92);
+      --qdv-muted: rgba(220, 225, 229, 0.6);
+      --qdv-border: rgba(71, 112, 153, 0.15);
     }
 
     .${COURSE_FOLLOW_BUTTON_CLASS} {
@@ -1676,6 +1925,8 @@ function removeExistingUi() {
   document.getElementById(BOX_ID)?.remove();
   document.getElementById(STYLE_ID)?.remove();
   document.getElementById(TOOLTIP_ID)?.remove();
+  document.getElementById(ASSIGNMENT_SIDEBAR_PANEL_ID)?.remove();
+  document.querySelector(".qdv-assignment-delay-modal")?.remove();
   document.querySelectorAll(".qdv-delay").forEach((element) => element.remove());
   document.querySelectorAll(".qdv-delay-inserted").forEach((element) => element.remove());
   document.querySelectorAll(".qdv-delay-cell").forEach((element) => {
@@ -2198,18 +2449,36 @@ function installCourseFollowStateStorageListener() {
       return;
     }
 
-    const change = changes?.[COURSE_FOLLOW_STATE_KEY];
-    if (!change) {
-      return;
+    const followChange = changes?.[COURSE_FOLLOW_STATE_KEY];
+    if (followChange) {
+      const nextState = normalizeCourseFollowState(followChange.newValue);
+      courseFollowStateCache = nextState;
+      courseFollowStateReady = Promise.resolve(courseFollowStateCache);
+      writeCourseFollowStateMirror(nextState);
+
+      if (isCourseListPage() || isCoursePage()) {
+        scheduleCourseFollowControls();
+      }
     }
 
-    const nextState = normalizeCourseFollowState(change.newValue);
-    courseFollowStateCache = nextState;
-    courseFollowStateReady = Promise.resolve(courseFollowStateCache);
-    writeCourseFollowStateMirror(nextState);
+    const assignmentChange = changes?.[ASSIGNMENT_STATE_KEY];
+    if (assignmentChange) {
+      const nextState = normalizeAssignmentState(assignmentChange.newValue);
+      assignmentStateCache = nextState;
+      assignmentStateReady = Promise.resolve(assignmentStateCache);
+      writeAssignmentStateMirror(nextState);
 
-    if (isCourseListPage() || isCoursePage()) {
-      scheduleCourseFollowControls();
+      if (isCoursePage()) {
+        scheduleCourseDelays();
+      }
+
+      if (isAssignmentPage()) {
+        renderAssignmentSidebarControls().catch((error) => {
+          if (!isExtensionContextInvalidatedError(error)) {
+            console.warn("[Deadline Viewer] assignment sidebar update failed", error);
+          }
+        });
+      }
     }
   });
 }
@@ -2332,6 +2601,239 @@ async function writeCourseFollowState(state) {
   courseFollowStateReady = Promise.resolve(courseFollowStateCache);
   writeCourseFollowStateMirror(normalized);
   await storageSet({ [COURSE_FOLLOW_STATE_KEY]: normalized });
+}
+
+function createEmptyAssignmentState() {
+  return {
+    version: 1,
+    assignments: {}
+  };
+}
+
+function normalizeAssignmentState(value) {
+  const state = createEmptyAssignmentState();
+
+  if (!value || typeof value !== "object") {
+    return state;
+  }
+
+  const assignments = value.assignments && typeof value.assignments === "object"
+    ? value.assignments
+    : {};
+
+  Object.entries(assignments).forEach(([assignmentId, assignment]) => {
+    const normalized = normalizeAssignmentRecord(assignmentId, assignment);
+    if (normalized) {
+      state.assignments[normalized.assignmentId] = normalized;
+    }
+  });
+
+  return state;
+}
+
+function normalizeAssignmentRecord(fallbackAssignmentId, value) {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const assignmentId = String(value.assignmentId || fallbackAssignmentId || "");
+  if (!assignmentId) {
+    return null;
+  }
+
+  const hasDelayOverride = Boolean(value.hasDelayOverride);
+  const delayOverrideSeconds = hasDelayOverride
+    ? Math.max(0, Math.floor(Number(value.delayOverrideSeconds) || 0))
+    : null;
+  const done = Boolean(value.done);
+
+  if (!done && !hasDelayOverride) {
+    return null;
+  }
+
+  return {
+    assignmentId,
+    courseId: String(value.courseId || ""),
+    assignmentName: normalizeText(value.assignmentName || ""),
+    done,
+    hasDelayOverride,
+    delayOverrideSeconds,
+    updatedAt: Number(value.updatedAt) || Date.now()
+  };
+}
+
+async function readAssignmentState() {
+  if (assignmentStateCache) {
+    return cloneAssignmentState(assignmentStateCache);
+  }
+
+  return readAssignmentStateFromStorage();
+}
+
+async function readAssignmentStateFromStorage() {
+  if (!assignmentStateReady) {
+    assignmentStateReady = storageGet(ASSIGNMENT_STATE_KEY)
+      .then((values) => {
+        assignmentStateCache = normalizeAssignmentState(values?.[ASSIGNMENT_STATE_KEY]);
+        writeAssignmentStateMirror(assignmentStateCache);
+        return assignmentStateCache;
+      })
+      .catch((error) => {
+        if (isExtensionContextInvalidatedError(error)) {
+          return createEmptyAssignmentState();
+        }
+
+        console.warn("[Deadline Viewer] assignment state read failed", error);
+        assignmentStateCache = createEmptyAssignmentState();
+        return assignmentStateCache;
+      });
+  }
+
+  await assignmentStateReady;
+  return cloneAssignmentState(assignmentStateCache);
+}
+
+function primeAssignmentStateMirror() {
+  readAssignmentState().catch((error) => {
+    if (isExtensionContextInvalidatedError(error)) {
+      return;
+    }
+
+    console.warn("[Deadline Viewer] assignment state mirror prime failed", error);
+  });
+}
+
+function cloneAssignmentState(state) {
+  return {
+    version: 1,
+    assignments: Object.fromEntries(
+      Object.entries(state?.assignments || {}).map(([assignmentId, assignment]) => [
+        assignmentId,
+        { ...assignment }
+      ])
+    )
+  };
+}
+
+function writeAssignmentStateMirror(state) {
+  try {
+    window.localStorage.setItem(
+      ASSIGNMENT_STATE_KEY,
+      JSON.stringify(normalizeAssignmentState(state))
+    );
+  } catch {
+    // The extension storage copy remains authoritative if page storage is unavailable.
+  }
+}
+
+async function writeAssignmentState(state) {
+  const normalized = normalizeAssignmentState(state);
+  assignmentStateCache = normalized;
+  assignmentStateReady = Promise.resolve(assignmentStateCache);
+  writeAssignmentStateMirror(normalized);
+  await storageSet({ [ASSIGNMENT_STATE_KEY]: normalized });
+}
+
+async function updateAssignmentState(mutator) {
+  assignmentStateReady = null;
+  const state = await readAssignmentStateFromStorage();
+  const mutatedState = mutator(state);
+  if (mutatedState === false) {
+    return state;
+  }
+
+  const nextState = mutatedState || state;
+  await writeAssignmentState(nextState);
+  return nextState;
+}
+
+function getAssignmentRecord(state, assignmentId) {
+  return state?.assignments?.[String(assignmentId || "")] || null;
+}
+
+function hasAssignmentDelayOverride(state, assignmentId) {
+  return Boolean(getAssignmentRecord(state, assignmentId)?.hasDelayOverride);
+}
+
+function getAssignmentDelayOverrideSeconds(state, assignmentId) {
+  const record = getAssignmentRecord(state, assignmentId);
+  if (!record?.hasDelayOverride) {
+    return null;
+  }
+
+  return Math.max(0, Math.floor(Number(record.delayOverrideSeconds) || 0));
+}
+
+function isAssignmentDoneInState(state, assignmentId) {
+  return Boolean(getAssignmentRecord(state, assignmentId)?.done);
+}
+
+async function setAssignmentDone(courseId, assignment, done) {
+  const assignmentInfo = normalizeAssignmentStateInput(courseId, assignment);
+  if (!assignmentInfo.assignmentId) {
+    return null;
+  }
+
+  return updateAssignmentState((state) => {
+    const previous = state.assignments[assignmentInfo.assignmentId] || {};
+    const nextRecord = normalizeAssignmentRecord(assignmentInfo.assignmentId, {
+      ...previous,
+      ...assignmentInfo,
+      done: Boolean(done),
+      hasDelayOverride: Boolean(previous.hasDelayOverride),
+      delayOverrideSeconds: previous.hasDelayOverride
+        ? previous.delayOverrideSeconds
+        : null,
+      updatedAt: Date.now()
+    });
+
+    if (nextRecord) {
+      state.assignments[assignmentInfo.assignmentId] = nextRecord;
+    } else {
+      delete state.assignments[assignmentInfo.assignmentId];
+    }
+
+    return state;
+  });
+}
+
+async function setAssignmentDelayOverride(courseId, assignment, secondsOrNull) {
+  const assignmentInfo = normalizeAssignmentStateInput(courseId, assignment);
+  if (!assignmentInfo.assignmentId) {
+    return null;
+  }
+
+  return updateAssignmentState((state) => {
+    const previous = state.assignments[assignmentInfo.assignmentId] || {};
+    const hasDelayOverride = secondsOrNull !== null;
+    const nextRecord = normalizeAssignmentRecord(assignmentInfo.assignmentId, {
+      ...previous,
+      ...assignmentInfo,
+      done: Boolean(previous.done),
+      hasDelayOverride,
+      delayOverrideSeconds: hasDelayOverride
+        ? Math.max(0, Math.floor(Number(secondsOrNull) || 0))
+        : null,
+      updatedAt: Date.now()
+    });
+
+    if (nextRecord) {
+      state.assignments[assignmentInfo.assignmentId] = nextRecord;
+    } else {
+      delete state.assignments[assignmentInfo.assignmentId];
+    }
+
+    return state;
+  });
+}
+
+function normalizeAssignmentStateInput(courseId, assignment) {
+  const assignmentId = String(assignment?.assignmentId || assignment?.id || assignment?.pk || "");
+  return {
+    assignmentId,
+    courseId: String(courseId || assignment?.courseId || ""),
+    assignmentName: normalizeText(assignment?.assignmentName || assignment?.name || assignmentId)
+  };
 }
 
 async function updateCourseFollowState(mutator) {
@@ -2750,14 +3252,15 @@ async function showCourseDelays() {
 
   injectStyles();
 
-  const state = createCourseDelayState(courseId, courseName, assignments);
+  const assignmentState = await readAssignmentState();
+  const state = createCourseDelayState(courseId, courseName, assignments, assignmentState);
 
   if (!document.getElementById(COURSE_TOTAL_ID)) {
     insertCourseTotalBadge(state);
   }
   await renderDelayBucketPanel(state);
 
-  for (const assignment of assignments) {
+  for (const assignment of state.assignments) {
     if (assignment.card && !assignment.card.querySelector(
       `.qdv-course-delay[data-assignment-id="${escapeCssIdent(assignment.id)}"]`
     )) {
@@ -2768,14 +3271,18 @@ async function showCourseDelays() {
   await hydrateCourseDelayState(state);
 }
 
-function createCourseDelayState(courseId, courseName, assignments) {
+function createCourseDelayState(courseId, courseName, assignments, assignmentState = createEmptyAssignmentState()) {
   activeCourseRenderId += 1;
 
   return {
     courseId,
     courseName,
     renderId: activeCourseRenderId,
-    assignments,
+    assignments: assignments.map((assignment) => ({
+      ...assignment,
+      courseId
+    })),
+    assignmentState,
     delaySecondsByAssignment: new Map(),
     delayHoursByAssignment: new Map(),
     statusByAssignment: new Map(),
@@ -2791,6 +3298,21 @@ async function hydrateCourseDelayState(state) {
   const pageContext = getPageContext();
 
   for (const assignment of state.assignments) {
+    const manualDelaySeconds = getAssignmentDelayOverrideSeconds(
+      state.assignmentState,
+      assignment.id
+    );
+
+    if (manualDelaySeconds !== null) {
+      applyAssignmentDelayResult(state, assignment, {
+        delaySeconds: manualDelaySeconds,
+        fetchedAt: now,
+        status: COURSE_DELAY_STATUS.fresh,
+        manual: true
+      });
+      continue;
+    }
+
     const finishTime = finishTimeMap.get(assignment.id);
     if (finishTime && finishTime.getTime() > now) {
       applyAssignmentDelayResult(state, assignment, {
@@ -2997,6 +3519,9 @@ function applyAssignmentDelayResult(state, assignment, result) {
   const delaySeconds = Number(result.delaySeconds) || 0;
   const delayHours = getRoundedDelayHours(delaySeconds);
   const status = result.status || COURSE_DELAY_STATUS.fresh;
+  const hasManualOverride =
+    Boolean(result.manual) ||
+    hasAssignmentDelayOverride(state.assignmentState, assignment.id);
   const hadKnownValue = state.delaySecondsByAssignment.has(assignment.id);
 
   state.pendingAssignments.delete(assignment.id);
@@ -3009,10 +3534,11 @@ function applyAssignmentDelayResult(state, assignment, result) {
       insertAssignmentDelayBadge(
         assignment,
         status,
-        formatRoundedHours(state.delayHoursByAssignment.get(assignment.id))
+        formatRoundedHours(state.delayHoursByAssignment.get(assignment.id)),
+        { hasManualOverride }
       );
     } else {
-      insertAssignmentDelayBadge(assignment, status, "—");
+      insertAssignmentDelayBadge(assignment, status, "—", { hasManualOverride });
     }
 
     updateCourseTotalBadge(state);
@@ -3023,7 +3549,12 @@ function applyAssignmentDelayResult(state, assignment, result) {
 
   state.delaySecondsByAssignment.set(assignment.id, delaySeconds);
   state.delayHoursByAssignment.set(assignment.id, delayHours);
-  insertAssignmentDelayBadge(assignment, status, formatRoundedHours(delayHours));
+  insertAssignmentDelayBadge(
+    assignment,
+    status,
+    formatRoundedHours(delayHours),
+    { hasManualOverride }
+  );
   updateCourseTotalBadge(state);
 }
 
@@ -3034,15 +3565,16 @@ function waitForCourseQueueDelay() {
   });
 }
 
-function insertAssignmentDelayBadge(assignment, status, value) {
+function insertAssignmentDelayBadge(assignment, status, value, options = {}) {
   if (!assignment.card) {
     return;
   }
 
   const badge = getOrCreateAssignmentDelayBadge(assignment);
   badge.className = `qdv-course-delay qdv-assignment-delay is-${status}`;
+  badge.classList.toggle("has-override", Boolean(options.hasManualOverride));
   badge.classList.toggle("is-zero", isZeroRoundedDelayValue(value));
-  badge.title = getAssignmentDelayTitle(status);
+  badge.title = getAssignmentDelayTitle(status, options);
   badge.replaceChildren(
     document.createTextNode("تاخیر"),
     createCourseDelayValue(value)
@@ -3061,10 +3593,33 @@ function getOrCreateAssignmentDelayBadge(assignment) {
   const metadataContainer = findAssignmentMetadataContainer(assignment.card);
 
   if (!badge) {
-    badge = document.createElement("span");
+    badge = document.createElement("button");
+    badge.type = "button";
     badge.className = "qdv-course-delay qdv-assignment-delay";
     badge.dataset.assignmentId = assignment.id;
+    badge.addEventListener("click", () => {
+      openAssignmentDelayModal({
+        courseId: assignment.courseId,
+        assignment,
+        afterSave: () => scheduleCourseDelays(0)
+      });
+    });
+  } else if (badge.tagName !== "BUTTON") {
+    const replacement = document.createElement("button");
+    replacement.type = "button";
+    replacement.dataset.assignmentId = assignment.id;
+    replacement.addEventListener("click", () => {
+      openAssignmentDelayModal({
+        courseId: assignment.courseId,
+        assignment,
+        afterSave: () => scheduleCourseDelays(0)
+      });
+    });
+    badge.replaceWith(replacement);
+    badge = replacement;
   }
+
+  badge.dataset.courseId = assignment.courseId || "";
 
   if (badge.parentElement !== metadataContainer) {
     metadataContainer.appendChild(badge);
@@ -3107,20 +3662,187 @@ function createCourseDelayValue(value) {
   return valueElement;
 }
 
-function getAssignmentDelayTitle(status) {
+function getAssignmentDelayTitle(status, options = {}) {
+  if (options.hasManualOverride) {
+    return "تاخیر دستی؛ برای ویرایش کلیک کنید";
+  }
+
   if (status === COURSE_DELAY_STATUS.loading) {
-    return "در صف دریافت تاخیر";
+    return "در صف دریافت تاخیر؛ برای ثبت دستی کلیک کنید";
   }
 
   if (status === COURSE_DELAY_STATUS.stale) {
-    return "تاخیر ذخیره‌شده؛ در صف به‌روزرسانی";
+    return "تاخیر ذخیره‌شده؛ برای ثبت دستی کلیک کنید";
   }
 
   if (status === COURSE_DELAY_STATUS.error) {
-    return "دریافت تاخیر ناموفق بود";
+    return "دریافت تاخیر ناموفق بود؛ برای ثبت دستی کلیک کنید";
   }
 
-  return "تاخیر ارسال نهایی";
+  return "تاخیر ارسال نهایی؛ برای ثبت دستی کلیک کنید";
+}
+
+async function openAssignmentDelayModal(options) {
+  const assignmentInfo = normalizeAssignmentStateInput(options.courseId, options.assignment);
+  if (!assignmentInfo.assignmentId) {
+    return;
+  }
+
+  document.querySelector(".qdv-assignment-delay-modal")?.remove();
+  injectStyles();
+
+  const assignmentState = await readAssignmentState();
+  const overrideSeconds = getAssignmentDelayOverrideSeconds(
+    assignmentState,
+    assignmentInfo.assignmentId
+  );
+  const fallbackSeconds = Number(options.currentDelaySeconds);
+  const initialSeconds = overrideSeconds !== null
+    ? overrideSeconds
+    : Number.isFinite(fallbackSeconds)
+      ? Math.max(0, fallbackSeconds)
+      : 0;
+
+  const modal = document.createElement("div");
+  modal.className = "qdv-assignment-delay-modal";
+  modal.dir = "rtl";
+  modal.setAttribute("role", "dialog");
+  modal.setAttribute("aria-modal", "true");
+
+  const dialog = document.createElement("div");
+  dialog.className = "qdv-assignment-delay-dialog";
+
+  const titleId = `qdv-assignment-delay-title-${assignmentInfo.assignmentId}`;
+  const head = document.createElement("div");
+  head.className = "qdv-assignment-delay-head";
+
+  const title = document.createElement("h2");
+  title.id = titleId;
+  title.className = "qdv-assignment-delay-title";
+  title.textContent = "تاخیر دستی";
+  modal.setAttribute("aria-labelledby", titleId);
+
+  const close = document.createElement("button");
+  close.type = "button";
+  close.className = "qdv-assignment-delay-icon";
+  close.setAttribute("aria-label", "بستن");
+  close.title = "بستن";
+  close.textContent = "×";
+  close.addEventListener("click", () => modal.remove());
+
+  head.append(title, close);
+
+  const fields = document.createElement("div");
+  fields.className = "qdv-assignment-delay-fields";
+
+  const daysField = createAssignmentDelayNumberField(
+    "روز",
+    "days",
+    Math.floor(initialSeconds / 86400)
+  );
+  const hoursField = createAssignmentDelayNumberField(
+    "ساعت",
+    "hours",
+    Math.floor((initialSeconds % 86400) / 3600)
+  );
+  fields.append(daysField.field, hoursField.field);
+
+  const actions = document.createElement("div");
+  actions.className = "qdv-assignment-delay-actions";
+
+  const save = document.createElement("button");
+  save.type = "button";
+  save.className = "qdv-assignment-delay-button";
+  save.textContent = "ذخیره";
+  save.addEventListener("click", async () => {
+    const seconds = getAssignmentDelayModalSeconds(daysField.input, hoursField.input);
+    await setAssignmentDelayOverride(options.courseId, assignmentInfo, seconds);
+    modal.remove();
+    await options.afterSave?.();
+  });
+
+  const clear = document.createElement("button");
+  clear.type = "button";
+  clear.className = "qdv-assignment-delay-button is-danger";
+  clear.textContent = "پاک کردن";
+  clear.addEventListener("click", async () => {
+    await setAssignmentDelayOverride(options.courseId, assignmentInfo, null);
+    modal.remove();
+    await options.afterSave?.();
+  });
+
+  const cancel = document.createElement("button");
+  cancel.type = "button";
+  cancel.className = "qdv-assignment-delay-button is-subtle";
+  cancel.textContent = "انصراف";
+  cancel.addEventListener("click", () => modal.remove());
+
+  actions.append(save, clear, cancel);
+  dialog.append(head, fields, actions);
+  modal.appendChild(dialog);
+  modal.addEventListener("click", (event) => {
+    if (event.target === modal) {
+      modal.remove();
+    }
+  });
+  modal.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      modal.remove();
+    }
+  });
+
+  document.body.appendChild(modal);
+  daysField.input.focus();
+  daysField.input.select();
+}
+
+function createAssignmentDelayNumberField(labelText, name, value) {
+  const field = document.createElement("label");
+  field.className = "qdv-assignment-delay-field";
+  field.textContent = labelText;
+
+  const input = document.createElement("input");
+  input.type = "number";
+  input.name = name;
+  input.min = "0";
+  input.step = "1";
+  input.inputMode = "numeric";
+  input.value = String(Math.max(0, Math.floor(Number(value) || 0)));
+  field.appendChild(input);
+
+  return { field, input };
+}
+
+function getAssignmentDelayModalSeconds(daysInput, hoursInput) {
+  const days = Math.max(0, Math.floor(Number(daysInput.value) || 0));
+  const hours = Math.max(0, Math.floor(Number(hoursInput.value) || 0));
+  return days * 86400 + hours * 3600;
+}
+
+function createPenIcon() {
+  const svgNamespace = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(svgNamespace, "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("fill", "none");
+  svg.setAttribute("stroke-width", "2");
+  svg.setAttribute("stroke-linecap", "round");
+  svg.setAttribute("stroke-linejoin", "round");
+  svg.setAttribute("aria-hidden", "true");
+  svg.setAttribute("focusable", "false");
+
+  [
+    ["path", { d: "M12 20h9" }],
+    ["path", { d: "M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" }]
+  ].forEach(([tagName, attributes]) => {
+    const element = document.createElementNS(svgNamespace, tagName);
+    Object.entries(attributes).forEach(([attrName, attrValue]) => {
+      element.setAttribute(attrName, attrValue);
+    });
+    svg.appendChild(element);
+  });
+
+  return svg;
 }
 
 function insertCourseTotalBadge(state) {
@@ -4828,6 +5550,194 @@ function getCurrentCourseMetadata() {
   });
 }
 
+async function renderAssignmentSidebarControls() {
+  const sidebar = document.getElementById("a-sidebar-menu");
+  const assignmentId = getAssignmentIdFromUrl();
+
+  if (!sidebar || !assignmentId) {
+    document.getElementById(ASSIGNMENT_SIDEBAR_PANEL_ID)?.remove();
+    return;
+  }
+
+  injectStyles();
+
+  const context = await getAssignmentPageStateContext(assignmentId);
+  const delay = await getAssignmentPageEffectiveDelay(context);
+  const assignmentState = await readAssignmentState();
+  const done = isAssignmentDoneInState(assignmentState, assignmentId);
+
+  const panel = getOrCreateAssignmentSidebarPanel(sidebar);
+  panel.replaceChildren(
+    createAssignmentSidebarDelayPanel(context, delay),
+    createAssignmentSidebarDoneControl(context, done)
+  );
+}
+
+async function getAssignmentPageStateContext(assignmentId) {
+  const followState = await readCourseFollowState();
+  const mapping = followState.assignments[assignmentId] || {};
+  const assignmentName =
+    mapping.assignmentName ||
+    getAssignmentNameFromPage() ||
+    assignmentId;
+
+  return {
+    assignmentId,
+    id: assignmentId,
+    courseId: String(mapping.courseId || ""),
+    name: assignmentName,
+    assignmentName
+  };
+}
+
+function getAssignmentNameFromPage() {
+  const heading = Array.from(document.querySelectorAll("h1, h2, h3")).find((element) => {
+    const text = normalizeText(element.textContent || "");
+    return text && !text.includes("ددلاین") && !text.includes("مهلت");
+  });
+
+  return normalizeText(heading?.textContent || document.title.split("|")[0] || "");
+}
+
+async function getAssignmentPageEffectiveDelay(context) {
+  const assignmentState = await readAssignmentState();
+  const manualDelaySeconds = getAssignmentDelayOverrideSeconds(
+    assignmentState,
+    context.assignmentId
+  );
+
+  if (manualDelaySeconds !== null) {
+    return {
+      seconds: manualDelaySeconds,
+      label: formatCompactDuration(manualDelaySeconds),
+      hasManualOverride: true,
+      loading: false
+    };
+  }
+
+  if (context.courseId) {
+    const cache = await readAssignmentDelayCache(context.courseId, context.assignmentId);
+    if (cache) {
+      const seconds = Math.max(0, Number(cache.delaySeconds) || 0);
+      return {
+        seconds,
+        label: formatCompactDuration(seconds),
+        hasManualOverride: false,
+        loading: false
+      };
+    }
+  }
+
+  return {
+    seconds: null,
+    label: context.courseId ? "..." : "نامشخص",
+    hasManualOverride: false,
+    loading: Boolean(context.courseId)
+  };
+}
+
+function getOrCreateAssignmentSidebarPanel(sidebar) {
+  let panel = document.getElementById(ASSIGNMENT_SIDEBAR_PANEL_ID);
+  if (!panel) {
+    panel = document.createElement("div");
+    panel.id = ASSIGNMENT_SIDEBAR_PANEL_ID;
+    panel.dir = "rtl";
+  }
+
+  if (panel.parentElement !== sidebar) {
+    const anchor = findAssignmentSidebarInsertAnchor(sidebar);
+    if (anchor) {
+      anchor.insertAdjacentElement("afterend", panel);
+    } else {
+      sidebar.appendChild(panel);
+    }
+  }
+
+  return panel;
+}
+
+function findAssignmentSidebarInsertAnchor(sidebar) {
+  const links = Array.from(sidebar.querySelectorAll("a")).filter((link) => {
+    const href = link.getAttribute("href") || "";
+    const text = normalizeText(link.textContent || "");
+    return (
+      href.includes("/submissions") ||
+      href.includes("/scoreboard") ||
+      href.includes("/standings") ||
+      text.includes("ارسال") ||
+      text.includes("رتبه")
+    );
+  });
+  const link = links[links.length - 1];
+  return getDirectChildWithin(sidebar, link);
+}
+
+function getDirectChildWithin(parent, element) {
+  let current = element;
+
+  while (current && current.parentElement && current.parentElement !== parent) {
+    current = current.parentElement;
+  }
+
+  return current?.parentElement === parent ? current : null;
+}
+
+function createAssignmentSidebarDelayPanel(context, delay) {
+  const row = document.createElement("div");
+  row.className = "qdv-sidebar-delay";
+
+  const text = document.createElement("div");
+
+  const label = document.createElement("div");
+  label.className = "qdv-sidebar-delay-label";
+  label.textContent = delay.hasManualOverride ? "تاخیر دستی" : "تاخیر ارسال نهایی";
+
+  const value = document.createElement("div");
+  value.className = "qdv-sidebar-delay-value";
+  value.textContent = delay.label;
+
+  text.append(label, value);
+
+  const edit = document.createElement("button");
+  edit.type = "button";
+  edit.className = "qdv-assignment-delay-icon";
+  edit.setAttribute("aria-label", "ویرایش تاخیر");
+  edit.title = "ویرایش تاخیر";
+  edit.appendChild(createPenIcon());
+  edit.addEventListener("click", () => {
+    openAssignmentDelayModal({
+      courseId: context.courseId,
+      assignment: context,
+      currentDelaySeconds: delay.seconds || 0,
+      afterSave: () => renderAssignmentSidebarControls()
+    });
+  });
+
+  row.append(text, edit);
+  return row;
+}
+
+function createAssignmentSidebarDoneControl(context, done) {
+  const label = document.createElement("label");
+  label.className = "qdv-sidebar-done";
+  label.title = done
+    ? "برگرداندن تمرین به ددلاین‌های پیش‌رو"
+    : "حذف تمرین از ددلاین‌های پیش‌رو";
+
+  const checkbox = document.createElement("input");
+  checkbox.type = "checkbox";
+  checkbox.checked = done;
+  checkbox.addEventListener("change", async () => {
+    const latestState = await readAssignmentState();
+    const latestDone = isAssignmentDoneInState(latestState, context.assignmentId);
+    await setAssignmentDone(context.courseId, context, !latestDone);
+    await renderAssignmentSidebarControls();
+  });
+
+  label.append(checkbox, document.createTextNode("انجام شد"));
+  return label;
+}
+
 function getCourseMetadataFromCardLink(link) {
   const courseId = getCourseIdFromLink(link);
   const courseNode = findCourseNodeInNextData(courseId);
@@ -5028,7 +5938,18 @@ function boot(force = false) {
 
   if (isAssignmentPage()) {
     showDeadlineData();
-    enrichAssignmentDelayCache();
+    renderAssignmentSidebarControls().catch((error) => {
+      if (!isExtensionContextInvalidatedError(error)) {
+        console.warn("[Deadline Viewer] assignment sidebar render failed", error);
+      }
+    });
+    enrichAssignmentDelayCache().then(() => {
+      return renderAssignmentSidebarControls();
+    }).catch((error) => {
+      if (!isExtensionContextInvalidatedError(error)) {
+        console.warn("[Deadline Viewer] assignment delay enrichment failed", error);
+      }
+    });
     return;
   }
 
@@ -5147,6 +6068,7 @@ function installRouteChangeWatcher() {
 
 installCourseFollowStateStorageListener();
 primeCourseFollowStateMirror();
+primeAssignmentStateMirror();
 installRouteChangeWatcher();
 runWhenDocumentReady(() => {
   runSafely(() => boot(true));
