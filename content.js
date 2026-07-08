@@ -2527,14 +2527,6 @@ function buildAssignmentFinishTimeMap(nextCourse) {
   return map;
 }
 
-function detectHardDeadlinePassedFromDoc(doc) {
-  const deadlineData = extractDeadlineDataFromDoc(doc);
-  if (!deadlineData?.serverNow?.date || !deadlineData?.hardFinishTime) {
-    return false;
-  }
-  return deadlineData.serverNow.date >= deadlineData.hardFinishTime;
-}
-
 function createDeadlineCacheFields(deadlineData) {
   if (!deadlineData?.finishTime?.date || !deadlineData?.hardFinishTime) {
     return {
@@ -3180,8 +3172,7 @@ function buildGoogleCalendarUrl(title, deadlineDate, details) {
   const params = new URLSearchParams({
     text: title,
     dates: `${formatGoogleCalendarDate(startDate)}/${formatGoogleCalendarDate(deadlineDate)}`,
-    details,
-    ctz: TEHRAN_TIME_ZONE
+    details
   });
 
   return `https://calendar.google.com/calendar/u/0/r/eventedit?${params.toString()}`;
