@@ -12,6 +12,9 @@ const ASSIGNMENT_STATE_KEY = "qdv-assignment-state:v1";
 const COURSE_FOLLOW_BUTTON_CLASS = "qdv-course-follow-button";
 const COURSE_FOLLOW_MENUITEM_CLASS = "qdv-course-follow-menuitem";
 const COURSE_FOLLOW_INDICATOR_CLASS = "qdv-course-follow-indicator";
+const ASSIGNMENT_CALENDAR_BUTTON_CLASS = "qdv-assignment-calendar-button";
+const COURSE_ASSIGNMENT_CALENDAR_BUTTON_CLASS = "qdv-course-assignment-calendar-button";
+const ASSIGNMENT_CALENDAR_FALLBACK_CLASS = "qdv-assignment-calendar-fallback";
 const ASSIGNMENT_SIDEBAR_PANEL_ID = "qdv-assignment-sidebar-state";
 const CACHE_TTL_HARD_DEADLINE_MS = 3 * 24 * 60 * 60 * 1000;
 const CACHE_TTL_ACTIVE_COURSE_MS = 60 * 60 * 1000;
@@ -56,6 +59,14 @@ const rateLimiter = {
 };
 
 function extractDeadlineData() {
+  return extractDeadlineDataFromScripts(document.scripts);
+}
+
+function extractDeadlineDataFromDoc(doc) {
+  return extractDeadlineDataFromScripts(doc?.scripts || []);
+}
+
+function extractDeadlineDataFromScripts(scripts) {
   const data = {
     serverNow: null,
     finishTime: null,
@@ -71,7 +82,7 @@ function extractDeadlineData() {
     extraTimeSeconds: /(?:var|let|const)\s+extra_time\s*=\s*([0-9]+)/
   };
 
-  for (const script of document.scripts) {
+  for (const script of scripts) {
     const text = script.textContent || "";
 
     if (!data.serverNow) {
@@ -687,7 +698,7 @@ function injectStyles() {
       font-weight: 500;
     }
 
-    .qdv-assignment-delay:not(.is-zero):not(.is-loading):not(.is-stale):not(.is-error) {
+    .qdv-assignment-delay:not(.is-loading):not(.is-stale):not(.is-error) {
       color: var(--qdv-primary);
     }
 
@@ -729,6 +740,128 @@ function injectStyles() {
       color: #feb2b2;
       background: rgba(254, 178, 178, 0.12);
       border-color: rgba(254, 178, 178, 0.18);
+    }
+
+    .qdv-calendar-button {
+      --qdv-primary: var(--colors-primary, #0076a6);
+      --qdv-primary-soft: var(--colors-primary-hover-opaque, rgba(0, 168, 214, 0.07));
+      --qdv-muted: var(--chakra-colors-text-pale, #718096);
+      --qdv-border: var(--colors-border, var(--chakra-colors-border-gray, #e2e8f0));
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      width: fit-content;
+      max-width: 100%;
+      color: var(--qdv-primary);
+      background: var(--qdv-primary-soft);
+      border: 1px solid transparent;
+      border-radius: 4px;
+      cursor: pointer;
+      font-family: inherit;
+      font-weight: 600;
+      line-height: 1.4;
+      direction: rtl;
+      white-space: nowrap;
+    }
+
+    .qdv-calendar-button:hover,
+    .qdv-calendar-button:focus {
+      border-color: var(--qdv-primary);
+      outline: none;
+    }
+
+    .qdv-calendar-button:disabled,
+    .qdv-calendar-button.is-loading {
+      color: var(--qdv-muted);
+      background: transparent;
+      border-color: var(--qdv-border);
+      cursor: default;
+    }
+
+    .qdv-calendar-button.is-added {
+      color: var(--qdv-muted);
+      background: transparent;
+      border-color: var(--qdv-border);
+    }
+
+    .qdv-calendar-button.is-warning {
+      color: #b7791f;
+      background: rgba(183, 121, 31, 0.1);
+      border-color: rgba(183, 121, 31, 0.22);
+    }
+
+    .qdv-course-assignment-calendar-button {
+      position: absolute;
+      z-index: 3;
+      flex: 0 0 auto;
+      width: 18px;
+      height: 18px;
+      padding: 0;
+      background: transparent;
+      border-color: transparent;
+      border-radius: 3px;
+      font-size: 0;
+      pointer-events: auto;
+    }
+
+    .qdv-course-assignment-title-container {
+      position: relative;
+    }
+
+    .qdv-course-assignment-calendar-button svg {
+      flex: 0 0 auto;
+    }
+
+    .qdv-course-assignment-calendar-icon {
+      width: 17px;
+      height: 17px;
+    }
+
+    .qdv-course-assignment-calendar-button.is-loading {
+      opacity: 0.45;
+      filter: grayscale(1);
+      cursor: wait;
+    }
+
+    .qdv-assignment-calendar-fallback {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 4px 6px;
+      width: 100%;
+      margin-top: 4px;
+      color: var(--qdv-muted, #718096);
+      font-size: 10px;
+      line-height: 1.5;
+    }
+
+    .qdv-assignment-calendar-fallback a {
+      color: var(--qdv-primary, #0076a6);
+      text-decoration: none;
+    }
+
+    .qdv-assignment-calendar-fallback a:hover,
+    .qdv-assignment-calendar-fallback a:focus {
+      text-decoration: underline;
+      outline: none;
+    }
+
+    html[data-theme="dark"] .qdv-calendar-button,
+    [data-theme="dark"] .qdv-calendar-button,
+    body.chakra-ui-dark .qdv-calendar-button {
+      --qdv-primary: #91def3;
+      --qdv-primary-soft: rgba(145, 222, 243, 0.12);
+      --qdv-muted: #a0aec0;
+      --qdv-border: #2d3748;
+    }
+
+    html[data-theme="dark"] .qdv-calendar-button.is-warning,
+    [data-theme="dark"] .qdv-calendar-button.is-warning,
+    body.chakra-ui-dark .qdv-calendar-button.is-warning {
+      color: #fbd38d;
+      background: rgba(251, 211, 141, 0.1);
+      border-color: rgba(251, 211, 141, 0.18);
     }
 
     .qdv-assignment-delay-modal {
@@ -896,6 +1029,7 @@ function injectStyles() {
       font-family: inherit;
     }
 
+    #${ASSIGNMENT_SIDEBAR_PANEL_ID} .qdv-sidebar-calendar,
     #${ASSIGNMENT_SIDEBAR_PANEL_ID} .qdv-sidebar-delay,
     #${ASSIGNMENT_SIDEBAR_PANEL_ID} .qdv-sidebar-done {
       display: flex;
@@ -906,6 +1040,36 @@ function injectStyles() {
       border-radius: 4px;
       font-size: 12px;
       line-height: 1.5;
+    }
+
+    #${ASSIGNMENT_SIDEBAR_PANEL_ID} .qdv-sidebar-calendar {
+      flex-wrap: wrap;
+      padding: 0;
+    }
+
+    #${ASSIGNMENT_SIDEBAR_PANEL_ID} .${ASSIGNMENT_CALENDAR_BUTTON_CLASS} {
+      min-height: 36px;
+      flex: 1 1 auto;
+      padding: 7px 9px;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    #${ASSIGNMENT_SIDEBAR_PANEL_ID} .qdv-calendar-warning {
+      flex: 0 0 auto;
+      padding: 3px 6px;
+      color: #b7791f;
+      background: rgba(183, 121, 31, 0.1);
+      border: 1px solid rgba(183, 121, 31, 0.2);
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 600;
+      line-height: 1.5;
+      white-space: nowrap;
+    }
+
+    #${ASSIGNMENT_SIDEBAR_PANEL_ID} .qdv-assignment-calendar-fallback {
+      font-size: 11px;
     }
 
     #${ASSIGNMENT_SIDEBAR_PANEL_ID} .qdv-sidebar-delay {
@@ -960,6 +1124,14 @@ function injectStyles() {
       --qdv-text: rgba(255, 255, 255, 0.92);
       --qdv-muted: rgba(220, 225, 229, 0.6);
       --qdv-border: rgba(71, 112, 153, 0.15);
+    }
+
+    html[data-theme="dark"] #${ASSIGNMENT_SIDEBAR_PANEL_ID} .qdv-calendar-warning,
+    [data-theme="dark"] #${ASSIGNMENT_SIDEBAR_PANEL_ID} .qdv-calendar-warning,
+    body.chakra-ui-dark #${ASSIGNMENT_SIDEBAR_PANEL_ID} .qdv-calendar-warning {
+      color: #fbd38d;
+      background: rgba(251, 211, 141, 0.1);
+      border-color: rgba(251, 211, 141, 0.18);
     }
 
     .${COURSE_FOLLOW_BUTTON_CLASS} {
@@ -1927,6 +2099,7 @@ function removeExistingUi() {
   document.getElementById(TOOLTIP_ID)?.remove();
   document.getElementById(ASSIGNMENT_SIDEBAR_PANEL_ID)?.remove();
   document.querySelector(".qdv-assignment-delay-modal")?.remove();
+  document.querySelectorAll(`.${ASSIGNMENT_CALENDAR_FALLBACK_CLASS}`).forEach((element) => element.remove());
   document.querySelectorAll(".qdv-delay").forEach((element) => element.remove());
   document.querySelectorAll(".qdv-delay-inserted").forEach((element) => element.remove());
   document.querySelectorAll(".qdv-delay-cell").forEach((element) => {
@@ -2355,42 +2528,35 @@ function buildAssignmentFinishTimeMap(nextCourse) {
 }
 
 function detectHardDeadlinePassedFromDoc(doc) {
-  const patterns = {
-    serverNow: /(?:var|let|const)\s+server_now\s*=\s*new\s+Date\s*\(['"]([^'"]+)['"]\)/,
-    finishTime: /(?:var|let|const)\s+finish_time\s*=\s*new\s+Date\s*\(['"]([^'"]+)['"]\)/,
-    extraTimeSeconds: /(?:var|let|const)\s+extra_time\s*=\s*([0-9]+)/
+  const deadlineData = extractDeadlineDataFromDoc(doc);
+  if (!deadlineData?.serverNow?.date || !deadlineData?.hardFinishTime) {
+    return false;
+  }
+  return deadlineData.serverNow.date >= deadlineData.hardFinishTime;
+}
+
+function createDeadlineCacheFields(deadlineData) {
+  if (!deadlineData?.finishTime?.date || !deadlineData?.hardFinishTime) {
+    return {
+      serverNow: "",
+      normalDeadline: "",
+      hardDeadline: "",
+      extraTimeSeconds: null,
+      hardDeadlinePassed: false
+    };
+  }
+
+  return {
+    serverNow: deadlineData.serverNow?.date?.toISOString?.() || "",
+    normalDeadline: deadlineData.finishTime.date.toISOString(),
+    hardDeadline: deadlineData.hardFinishTime.toISOString(),
+    extraTimeSeconds: Number.isFinite(Number(deadlineData.extraTimeSeconds))
+      ? Math.max(0, Math.floor(Number(deadlineData.extraTimeSeconds)))
+      : null,
+    hardDeadlinePassed: deadlineData.serverNow?.date
+      ? deadlineData.serverNow.date >= deadlineData.hardFinishTime
+      : false
   };
-
-  let serverNow = null;
-  let finishTime = null;
-  let extraTimeSeconds = null;
-
-  for (const script of doc.scripts) {
-    const text = script.textContent || "";
-    if (!serverNow) {
-      const match = text.match(patterns.serverNow);
-      if (match) serverNow = new Date(match[1]);
-    }
-    if (!finishTime) {
-      const match = text.match(patterns.finishTime);
-      if (match) finishTime = new Date(match[1]);
-    }
-    if (extraTimeSeconds === null) {
-      const match = text.match(patterns.extraTimeSeconds);
-      if (match) extraTimeSeconds = Number(match[1]);
-    }
-    if (serverNow && finishTime && extraTimeSeconds !== null) {
-      break;
-    }
-  }
-
-  if (!serverNow || !finishTime || extraTimeSeconds === null) {
-    return false;
-  }
-  if (Number.isNaN(serverNow.getTime()) || Number.isNaN(finishTime.getTime())) {
-    return false;
-  }
-  return serverNow >= new Date(finishTime.getTime() + extraTimeSeconds * 1000);
 }
 
 function getExtensionStorage() {
@@ -2646,8 +2812,10 @@ function normalizeAssignmentRecord(fallbackAssignmentId, value) {
     ? Math.max(0, Math.floor(Number(value.delayOverrideSeconds) || 0))
     : null;
   const done = Boolean(value.done);
+  const calendarPrompted = Boolean(value.calendarPrompted);
+  const calendarPromptSignature = normalizeText(value.calendarPromptSignature || "");
 
-  if (!done && !hasDelayOverride) {
+  if (!done && !hasDelayOverride && !calendarPrompted) {
     return null;
   }
 
@@ -2658,6 +2826,23 @@ function normalizeAssignmentRecord(fallbackAssignmentId, value) {
     done,
     hasDelayOverride,
     delayOverrideSeconds,
+    calendarPrompted,
+    calendarPromptedAt: calendarPrompted
+      ? Number(value.calendarPromptedAt) || Date.now()
+      : null,
+    calendarPromptSignature: calendarPrompted ? calendarPromptSignature : "",
+    calendarNormalDeadline: calendarPrompted
+      ? normalizeText(value.calendarNormalDeadline || "")
+      : "",
+    calendarHardDeadline: calendarPrompted
+      ? normalizeText(value.calendarHardDeadline || "")
+      : "",
+    calendarCourseName: calendarPrompted
+      ? normalizeText(value.calendarCourseName || "")
+      : "",
+    calendarSource: calendarPrompted
+      ? normalizeText(value.calendarSource || "Fix Quera")
+      : "",
     updatedAt: Number(value.updatedAt) || Date.now()
   };
 }
@@ -2784,6 +2969,13 @@ async function setAssignmentDone(courseId, assignment, done) {
       delayOverrideSeconds: previous.hasDelayOverride
         ? previous.delayOverrideSeconds
         : null,
+      calendarPrompted: Boolean(previous.calendarPrompted),
+      calendarPromptedAt: previous.calendarPromptedAt,
+      calendarPromptSignature: previous.calendarPromptSignature,
+      calendarNormalDeadline: previous.calendarNormalDeadline,
+      calendarHardDeadline: previous.calendarHardDeadline,
+      calendarCourseName: previous.calendarCourseName,
+      calendarSource: previous.calendarSource,
       updatedAt: Date.now()
     });
 
@@ -2814,6 +3006,13 @@ async function setAssignmentDelayOverride(courseId, assignment, secondsOrNull) {
       delayOverrideSeconds: hasDelayOverride
         ? Math.max(0, Math.floor(Number(secondsOrNull) || 0))
         : null,
+      calendarPrompted: Boolean(previous.calendarPrompted),
+      calendarPromptedAt: previous.calendarPromptedAt,
+      calendarPromptSignature: previous.calendarPromptSignature,
+      calendarNormalDeadline: previous.calendarNormalDeadline,
+      calendarHardDeadline: previous.calendarHardDeadline,
+      calendarCourseName: previous.calendarCourseName,
+      calendarSource: previous.calendarSource,
       updatedAt: Date.now()
     });
 
@@ -2827,6 +3026,43 @@ async function setAssignmentDelayOverride(courseId, assignment, secondsOrNull) {
   });
 }
 
+async function setAssignmentCalendarPrompted(calendarData) {
+  if (!calendarData?.assignmentId || !calendarData.signature) {
+    return null;
+  }
+
+  return updateAssignmentState((state) => {
+    const previous = state.assignments[calendarData.assignmentId] || {};
+    const nextRecord = normalizeAssignmentRecord(calendarData.assignmentId, {
+      ...previous,
+      assignmentId: calendarData.assignmentId,
+      courseId: calendarData.courseId,
+      assignmentName: calendarData.assignmentName,
+      done: Boolean(previous.done),
+      hasDelayOverride: Boolean(previous.hasDelayOverride),
+      delayOverrideSeconds: previous.hasDelayOverride
+        ? previous.delayOverrideSeconds
+        : null,
+      calendarPrompted: true,
+      calendarPromptedAt: Date.now(),
+      calendarPromptSignature: calendarData.signature,
+      calendarNormalDeadline: calendarData.normalDeadline,
+      calendarHardDeadline: calendarData.hardDeadline,
+      calendarCourseName: calendarData.courseName,
+      calendarSource: "Fix Quera",
+      updatedAt: Date.now()
+    });
+
+    if (nextRecord) {
+      state.assignments[calendarData.assignmentId] = nextRecord;
+    } else {
+      delete state.assignments[calendarData.assignmentId];
+    }
+
+    return state;
+  });
+}
+
 function normalizeAssignmentStateInput(courseId, assignment) {
   const assignmentId = String(assignment?.assignmentId || assignment?.id || assignment?.pk || "");
   return {
@@ -2834,6 +3070,152 @@ function normalizeAssignmentStateInput(courseId, assignment) {
     courseId: String(courseId || assignment?.courseId || ""),
     assignmentName: normalizeText(assignment?.assignmentName || assignment?.name || assignmentId)
   };
+}
+
+function parseCalendarDate(value) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function createAssignmentCalendarData(options) {
+  const normalDeadline = options.normalDate.toISOString();
+  const hardDeadline = options.hardDate.toISOString();
+  const assignmentUrl = getCanonicalAssignmentUrl(options.assignmentId);
+  const signature = getAssignmentCalendarSignature(
+    options.assignmentId,
+    normalDeadline,
+    hardDeadline
+  );
+
+  return {
+    courseId: String(options.courseId || ""),
+    courseName: normalizeText(options.courseName || ""),
+    assignmentId: String(options.assignmentId || ""),
+    assignmentName: normalizeText(options.assignmentName || options.assignmentId || ""),
+    assignmentUrl,
+    normalDeadline,
+    hardDeadline,
+    normalDate: options.normalDate,
+    hardDate: options.hardDate,
+    signature,
+    fetchedAt: Number(options.fetchedAt) || 0,
+    status: options.status || COURSE_DELAY_STATUS.fresh
+  };
+}
+
+function createAssignmentCalendarDataFromDeadline(courseId, courseName, assignment, deadlineData) {
+  if (!deadlineData?.finishTime?.date || !deadlineData?.hardFinishTime) {
+    return null;
+  }
+
+  const assignmentInfo = normalizeAssignmentStateInput(courseId, assignment);
+  if (!assignmentInfo.assignmentId || !courseName || !assignmentInfo.assignmentName) {
+    return null;
+  }
+
+  return createAssignmentCalendarData({
+    courseId: assignmentInfo.courseId,
+    courseName,
+    assignmentId: assignmentInfo.assignmentId,
+    assignmentName: assignmentInfo.assignmentName,
+    normalDate: deadlineData.finishTime.date,
+    hardDate: deadlineData.hardFinishTime
+  });
+}
+
+function getAssignmentCalendarSignature(assignmentId, normalDeadline, hardDeadline) {
+  return [
+    String(assignmentId || ""),
+    normalizeText(normalDeadline || ""),
+    normalizeText(hardDeadline || "")
+  ].join(":");
+}
+
+function getCanonicalAssignmentUrl(assignmentId) {
+  return `${window.location.origin}/course/assignments/${assignmentId}/problems`;
+}
+
+function getCalendarPromptStatus(assignmentState, calendarData) {
+  const record = getAssignmentRecord(assignmentState, calendarData?.assignmentId);
+  const prompted = Boolean(record?.calendarPrompted && record.calendarPromptSignature);
+  const current = prompted && record.calendarPromptSignature === calendarData?.signature;
+  return {
+    prompted,
+    current,
+    changed: prompted && !current
+  };
+}
+
+function buildGoogleCalendarEvents(calendarData) {
+  const details = [
+    `Course: ${calendarData.courseName}`,
+    calendarData.assignmentUrl,
+    "Created by Fix Quera"
+  ].join("\n");
+  const hasCombinedDeadline = isSameTime(calendarData.normalDate, calendarData.hardDate);
+  const events = [
+    {
+      title: `${hasCombinedDeadline ? "(هارد)ددلاین" : "ددلاین"}: ${calendarData.courseName} - ${calendarData.assignmentName}`,
+      date: calendarData.normalDate,
+      details
+    }
+  ];
+
+  if (!hasCombinedDeadline) {
+    events.push({
+      title: `هارد ددلاین: ${calendarData.courseName} - ${calendarData.assignmentName}`,
+      date: calendarData.hardDate,
+      details
+    });
+  }
+
+  return events.map((event) => ({
+    ...event,
+    url: buildGoogleCalendarUrl(event.title, event.date, event.details)
+  }));
+}
+
+function buildGoogleCalendarUrl(title, deadlineDate, details) {
+  const startDate = new Date(deadlineDate.getTime() - 60 * 60 * 1000);
+  const params = new URLSearchParams({
+    text: title,
+    dates: `${formatGoogleCalendarDate(startDate)}/${formatGoogleCalendarDate(deadlineDate)}`,
+    details,
+    ctz: TEHRAN_TIME_ZONE
+  });
+
+  return `https://calendar.google.com/calendar/u/0/r/eventedit?${params.toString()}`;
+}
+
+function formatGoogleCalendarDate(date) {
+  return date
+    .toISOString()
+    .replace(/[-:]/g, "")
+    .replace(/\.\d{3}Z$/, "Z");
+}
+
+async function openCalendarPrompts(calendarData, afterPrompt) {
+  const events = buildGoogleCalendarEvents(calendarData);
+  const openedCount = events.reduce((count, event) => {
+    const opened = window.open(event.url, "_blank");
+    if (opened) {
+      try {
+        opened.opener = null;
+      } catch {
+        // Popup blockers are handled by fallback links below.
+      }
+      return count + 1;
+    }
+    return count;
+  }, 0);
+
+  if (openedCount === events.length) {
+    await setAssignmentCalendarPrompted(calendarData);
+    await afterPrompt?.();
+    return true;
+  }
+
+  return false;
 }
 
 async function updateCourseFollowState(mutator) {
@@ -3182,6 +3564,7 @@ function getCourseAssignments(nextCourse = getNextDataCourse()) {
       assignmentsById.set(id, {
         id,
         name: normalizeText(assignment.name || id),
+        finishTime: normalizeText(assignment.finish_time || ""),
         finalUrl: `/course/assignments/${id}/submissions/final`,
         card: null
       });
@@ -3208,6 +3591,7 @@ function getCourseAssignments(nextCourse = getNextDataCourse()) {
         ...previous,
         id,
         name: normalizeText(link.textContent || link.getAttribute("title") || previous.name || id),
+        finishTime: previous.finishTime || "",
         finalUrl: `/course/assignments/${id}/submissions/final`,
         card
       });
@@ -3268,6 +3652,7 @@ async function showCourseDelays() {
     }
   }
 
+  await hydrateCourseCalendarState(state);
   await hydrateCourseDelayState(state);
 }
 
@@ -3298,6 +3683,11 @@ async function hydrateCourseDelayState(state) {
   const pageContext = getPageContext();
 
   for (const assignment of state.assignments) {
+    const cache = await readAssignmentDelayCache(state.courseId, assignment.id);
+    const hasCompleteDeadlineCache = hasCompleteAssignmentDeadlineCache(
+      cache,
+      assignment.finishTime
+    );
     const manualDelaySeconds = getAssignmentDelayOverrideSeconds(
       state.assignmentState,
       assignment.id
@@ -3308,8 +3698,15 @@ async function hydrateCourseDelayState(state) {
         delaySeconds: manualDelaySeconds,
         fetchedAt: now,
         status: COURSE_DELAY_STATUS.fresh,
-        manual: true
+        manual: true,
+        normalDeadline: cache?.normalDeadline,
+        hardDeadline: cache?.hardDeadline,
+        extraTimeSeconds: cache?.extraTimeSeconds,
+        hardDeadlinePassed: cache?.hardDeadlinePassed
       });
+      if (!hasCompleteDeadlineCache) {
+        ensureAssignmentDeadlineCacheScheduled(state, assignment, cache);
+      }
       continue;
     }
 
@@ -3318,30 +3715,39 @@ async function hydrateCourseDelayState(state) {
       applyAssignmentDelayResult(state, assignment, {
         delaySeconds: 0,
         fetchedAt: now,
-        status: COURSE_DELAY_STATUS.fresh
+        status: COURSE_DELAY_STATUS.fresh,
+        normalDeadline: cache?.normalDeadline,
+        hardDeadline: cache?.hardDeadline,
+        extraTimeSeconds: cache?.extraTimeSeconds,
+        hardDeadlinePassed: cache?.hardDeadlinePassed
       });
+      if (!hasCompleteDeadlineCache) {
+        ensureAssignmentDeadlineCacheScheduled(state, assignment, cache);
+      }
       continue;
     }
 
-    const cache = await readAssignmentDelayCache(state.courseId, assignment.id);
-
-    if (cache) {
+    if (cache && cache.hasDelayData !== false) {
       const ttl = getEffectiveCacheTTL(cache, pageContext);
       const isFresh = ttl > 0 && now - Number(cache.fetchedAt) < ttl;
 
       applyAssignmentDelayResult(state, assignment, {
         delaySeconds: Number(cache.delaySeconds) || 0,
         fetchedAt: Number(cache.fetchedAt) || 0,
-        status: isFresh ? COURSE_DELAY_STATUS.fresh : COURSE_DELAY_STATUS.stale
+        status: isFresh ? COURSE_DELAY_STATUS.fresh : COURSE_DELAY_STATUS.stale,
+        normalDeadline: cache.normalDeadline,
+        hardDeadline: cache.hardDeadline,
+        extraTimeSeconds: cache.extraTimeSeconds,
+        hardDeadlinePassed: cache.hardDeadlinePassed
       });
 
-      if (isFresh) {
+      if (isFresh && hasCompleteDeadlineCache) {
         continue;
       }
     }
 
     enqueueAssignmentDelayFetch(state, assignment, {
-      showLoading: !cache
+      showLoading: !cache || cache.hasDelayData === false
     });
   }
 
@@ -3354,19 +3760,48 @@ async function readAssignmentDelayCache(courseId, assignmentId) {
   return values?.[key] || null;
 }
 
-async function writeAssignmentDelayCache(courseId, assignment, delaySeconds, status, hardDeadlinePassed) {
+async function writeAssignmentDelayCache(courseId, assignment, result) {
   const key = getAssignmentDelayCacheKey(courseId, assignment.id);
+  const delaySeconds = Number(result?.delaySeconds) || 0;
   await storageSet({
     [key]: {
       courseId,
       assignmentId: assignment.id,
       assignmentName: assignment.name,
       delaySeconds,
+      delaySamples: Array.isArray(result?.delaySamples)
+        ? result.delaySamples.filter(Number.isFinite)
+        : [],
+      hasDelayData: result?.hasDelayData !== false,
       displayHours: getRoundedDelayHours(delaySeconds),
-      fetchedAt: Date.now(),
-      status,
-      hardDeadlinePassed: Boolean(hardDeadlinePassed)
+      fetchedAt: Number(result?.fetchedAt) || Date.now(),
+      status: result?.status || COURSE_DELAY_STATUS.fresh,
+      hardDeadlinePassed: Boolean(result?.hardDeadlinePassed),
+      serverNow: normalizeText(result?.serverNow || ""),
+      normalDeadline: normalizeText(result?.normalDeadline || ""),
+      hardDeadline: normalizeText(result?.hardDeadline || ""),
+      extraTimeSeconds: Number.isFinite(Number(result?.extraTimeSeconds))
+        ? Math.max(0, Math.floor(Number(result.extraTimeSeconds)))
+        : null
     }
+  });
+}
+
+async function mergeAssignmentDeadlineCache(courseId, assignment, deadlineData) {
+  const deadlineFields = createDeadlineCacheFields(deadlineData);
+  if (!deadlineFields.normalDeadline || !deadlineFields.hardDeadline) {
+    return;
+  }
+
+  const existing = await readAssignmentDelayCache(courseId, assignment.id);
+  await writeAssignmentDelayCache(courseId, assignment, {
+    ...existing,
+    delaySeconds: Number(existing?.delaySeconds) || 0,
+    delaySamples: Array.isArray(existing?.delaySamples) ? existing.delaySamples : [],
+    hasDelayData: Boolean(existing && existing.hasDelayData !== false),
+    fetchedAt: Number(existing?.fetchedAt) || Date.now(),
+    status: existing?.status || COURSE_DELAY_STATUS.fresh,
+    ...deadlineFields
   });
 }
 
@@ -3444,13 +3879,7 @@ async function fetchQueuedAssignmentDelay(work) {
       fetchAssignmentDelay(assignment)
         .then(async (result) => {
           recordRateLimitRequest();
-          await writeAssignmentDelayCache(
-            courseId,
-            assignment,
-            result.delaySeconds,
-            COURSE_DELAY_STATUS.fresh,
-            result.hardDeadlinePassed
-          );
+          await writeAssignmentDelayCache(courseId, assignment, result);
           return result;
         })
         .catch((error) => {
@@ -3501,14 +3930,90 @@ async function fetchAssignmentDelay(assignment) {
     .map((element) => Number(element.getAttribute("data-duration")))
     .filter(Number.isFinite);
 
-  const hardDeadlinePassed = detectHardDeadlinePassedFromDoc(doc);
+  const deadlineData = extractDeadlineDataFromDoc(doc);
+  const deadlineFields = createDeadlineCacheFields(deadlineData);
 
   return {
     delaySeconds: delays.length ? Math.max(...delays) : 0,
+    delaySamples: delays,
+    deadlineFetched: Boolean(deadlineFields.normalDeadline && deadlineFields.hardDeadline),
     fetchedAt: Date.now(),
     status: COURSE_DELAY_STATUS.fresh,
-    hardDeadlinePassed
+    ...deadlineFields
   };
+}
+
+async function hydrateCourseCalendarState(state) {
+  for (const assignment of state.assignments) {
+    const cache = await readAssignmentDelayCache(state.courseId, assignment.id);
+    const calendarData = createCourseAssignmentCalendarData(
+      state.courseId,
+      state.courseName,
+      assignment,
+      cache
+    );
+
+    if (calendarData) {
+      await renderCourseAssignmentCalendarControl(state, assignment, calendarData);
+    } else {
+      renderCourseAssignmentCalendarPending(assignment);
+      ensureAssignmentDeadlineCacheScheduled(state, assignment, cache);
+    }
+  }
+}
+
+function createCourseAssignmentCalendarData(courseId, courseName, assignment, cache) {
+  const assignmentNormalDate = parseCalendarDate(assignment.finishTime);
+  const cachedNormalDate = parseCalendarDate(cache?.normalDeadline);
+  const normalDate = assignmentNormalDate || cachedNormalDate;
+  if (!normalDate) {
+    return null;
+  }
+
+  const cachedHardDate = parseCalendarDate(cache?.hardDeadline);
+  if (!cachedHardDate) {
+    return null;
+  }
+
+  if (assignmentNormalDate) {
+    if (!hasCompleteAssignmentDeadlineCache(cache, assignment.finishTime)) {
+      return null;
+    }
+  } else if (
+    !cachedNormalDate ||
+    cache?.normalDeadline !== cachedNormalDate.toISOString()
+  ) {
+    return null;
+  }
+
+  return createAssignmentCalendarData({
+    courseId,
+    courseName,
+    assignmentId: assignment.id,
+    assignmentName: assignment.name,
+    normalDate,
+    hardDate: cachedHardDate,
+    fetchedAt: cache.fetchedAt,
+    status: cache.status || COURSE_DELAY_STATUS.fresh
+  });
+}
+
+function hasCompleteAssignmentDeadlineCache(cache, finishTime) {
+  const normalDate = parseCalendarDate(finishTime);
+  const cachedHardDate = parseCalendarDate(cache?.hardDeadline);
+  if (!normalDate || !cachedHardDate) {
+    return false;
+  }
+
+  return cache?.normalDeadline === normalDate.toISOString();
+}
+
+function ensureAssignmentDeadlineCacheScheduled(state, assignment, cache) {
+  if (cache?.status === COURSE_DELAY_STATUS.loading) {
+    return;
+  }
+
+  enqueueAssignmentDelayFetch(state, assignment, { showLoading: false });
 }
 
 function applyAssignmentDelayResult(state, assignment, result) {
@@ -3555,6 +4060,7 @@ function applyAssignmentDelayResult(state, assignment, result) {
     formatRoundedHours(delayHours),
     { hasManualOverride }
   );
+  renderCourseAssignmentCalendarFromDelayResult(state, assignment, result);
   updateCourseTotalBadge(state);
 }
 
@@ -3573,7 +4079,6 @@ function insertAssignmentDelayBadge(assignment, status, value, options = {}) {
   const badge = getOrCreateAssignmentDelayBadge(assignment);
   badge.className = `qdv-course-delay qdv-assignment-delay is-${status}`;
   badge.classList.toggle("has-override", Boolean(options.hasManualOverride));
-  badge.classList.toggle("is-zero", isZeroRoundedDelayValue(value));
   badge.title = getAssignmentDelayTitle(status, options);
   badge.replaceChildren(
     document.createTextNode("تاخیر"),
@@ -3628,8 +4133,252 @@ function getOrCreateAssignmentDelayBadge(assignment) {
   return badge;
 }
 
-function isZeroRoundedDelayValue(value) {
-  return /^۰\s*ساعت$|^0\s*ساعت$/.test(normalizeText(value || ""));
+function renderCourseAssignmentCalendarPending(assignment) {
+  if (!assignment.card) {
+    return;
+  }
+
+  const button = getOrCreateCourseAssignmentCalendarButton(assignment);
+  if (!button) {
+    return;
+  }
+
+  button.disabled = false;
+  button.className = [
+    "qdv-calendar-button",
+    COURSE_ASSIGNMENT_CALENDAR_BUTTON_CLASS,
+    "is-loading"
+  ].join(" ");
+  button.setAttribute("aria-disabled", "true");
+  button.setAttribute("aria-label", "در حال آماده‌سازی ددلاین برای Google Calendar");
+  button.title = "در حال دریافت هارد ددلاین از کش تاخیر";
+  button.onclick = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+  };
+  button.replaceChildren(createGoogleCalendarIcon());
+  positionCourseAssignmentCalendarButtonForAssignment(assignment, button);
+  removeAssignmentCalendarFallback(button.parentElement);
+}
+
+function renderCourseAssignmentCalendarFromDelayResult(state, assignment, result) {
+  const calendarData = createCourseAssignmentCalendarData(
+    state.courseId,
+    state.courseName,
+    assignment,
+    result
+  );
+
+  if (!calendarData) {
+    renderCourseAssignmentCalendarPending(assignment);
+    return;
+  }
+
+  renderCourseAssignmentCalendarControl(state, assignment, calendarData).catch((error) => {
+    if (!isExtensionContextInvalidatedError(error)) {
+      console.warn("[Deadline Viewer] calendar control render failed", error);
+    }
+  });
+}
+
+async function renderCourseAssignmentCalendarControl(state, assignment, calendarData) {
+  if (!assignment.card || !calendarData?.signature) {
+    return;
+  }
+
+  const assignmentState = await readAssignmentState();
+  const promptStatus = getCalendarPromptStatus(assignmentState, calendarData);
+
+  if (promptStatus.current) {
+    removeCourseAssignmentCalendarControl(assignment);
+    return;
+  }
+
+  const button = getOrCreateCourseAssignmentCalendarButton(assignment);
+  if (!button) {
+    return;
+  }
+
+  button.disabled = false;
+  button.setAttribute("aria-disabled", "false");
+  button.className = [
+    "qdv-calendar-button",
+    COURSE_ASSIGNMENT_CALENDAR_BUTTON_CLASS,
+    promptStatus.changed ? "is-warning" : ""
+  ].filter(Boolean).join(" ");
+  button.textContent = promptStatus.changed ? "تغییر ددلاین" : "تقویم";
+  button.setAttribute(
+    "aria-label",
+    promptStatus.changed
+      ? "ددلاین تغییر کرده است؛ افزودن نسخه جدید به Google Calendar"
+      : "افزودن ددلاین و هارد ددلاین به Google Calendar"
+  );
+  button.replaceChildren(createGoogleCalendarIcon());
+  positionCourseAssignmentCalendarButtonForAssignment(assignment, button);
+  button.title = promptStatus.changed
+    ? "ددلاین تغییر کرده است؛ برای افزودن نسخه جدید به تقویم کلیک کنید"
+    : "افزودن ددلاین و هارد ددلاین به Google Calendar";
+  button.onclick = async (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    removeAssignmentCalendarFallback(button.parentElement);
+    const opened = await openCalendarPrompts(calendarData, () => {
+      return renderCourseAssignmentCalendarControl(state, assignment, calendarData);
+    });
+
+    if (!opened) {
+      showAssignmentCalendarFallback(button.parentElement, calendarData, () => {
+        return renderCourseAssignmentCalendarControl(state, assignment, calendarData);
+      });
+    }
+  };
+}
+
+function getOrCreateCourseAssignmentCalendarButton(assignment) {
+  const placement = getCourseAssignmentCalendarPlacement(assignment);
+  if (!placement) {
+    return null;
+  }
+  const { container, link, titleElement } = placement;
+  container.classList.add("qdv-course-assignment-title-container");
+
+  let button = assignment.card.querySelector(
+    `.${COURSE_ASSIGNMENT_CALENDAR_BUTTON_CLASS}[data-assignment-id="${escapeCssIdent(assignment.id)}"]`
+  );
+
+  if (!button) {
+    button = document.createElement("button");
+    button.type = "button";
+    button.dataset.assignmentId = assignment.id;
+  }
+
+  if (button.parentElement !== container) {
+    link.insertAdjacentElement("afterend", button);
+  }
+
+  positionCourseAssignmentCalendarButton(button, titleElement);
+  return button;
+}
+
+function getCourseAssignmentCalendarPlacement(assignment) {
+  const link = findCourseAssignmentTitleLink(assignment);
+  const titleElement = findCourseAssignmentTitleElement(link);
+  if (!link || !titleElement || !link.parentElement) {
+    return null;
+  }
+
+  return {
+    container: link.parentElement,
+    link,
+    titleElement
+  };
+}
+
+function findCourseAssignmentTitleLink(assignment) {
+  if (!assignment?.card) {
+    return null;
+  }
+
+  return Array.from(
+    assignment.card.querySelectorAll('a[href*="/course/assignments/"][href*="/problems"]')
+  ).find((link) => {
+    try {
+      const url = new URL(link.href, window.location.href);
+      return url.pathname.match(/\/course\/assignments\/(\d+)\/problems\/?/)?.[1] === assignment.id;
+    } catch {
+      return false;
+    }
+  }) || null;
+}
+
+function findCourseAssignmentTitleElement(link) {
+  if (!link) {
+    return null;
+  }
+
+  return Array.from(link.querySelectorAll("p, span, h1, h2, h3, h4")).find((element) => {
+    if (element.classList.contains("qdv-course-assignment-title-row")) {
+      return false;
+    }
+    return normalizeText(element.textContent || "");
+  }) || link.firstElementChild || link;
+}
+
+function positionCourseAssignmentCalendarButton(button, titleElement) {
+  if (!button?.parentElement || !titleElement?.getBoundingClientRect) {
+    return;
+  }
+
+  const container = button.parentElement;
+  const titleRect = titleElement.getBoundingClientRect();
+  const containerRect = container.getBoundingClientRect();
+  if (!titleRect.width || !titleRect.height || !containerRect.width) {
+    return;
+  }
+
+  const buttonSize = 18;
+  const gap = 4;
+  const top = Math.max(0, titleRect.top - containerRect.top + (titleRect.height - buttonSize) / 2);
+  const direction = getComputedStyle(titleElement).direction || getComputedStyle(container).direction;
+  const rtlLeft = titleRect.left - containerRect.left - buttonSize - gap;
+  const ltrLeft = titleRect.right - containerRect.left + gap;
+  const left = direction === "rtl" && rtlLeft >= 0 ? rtlLeft : ltrLeft;
+
+  button.style.top = `${Math.round(top)}px`;
+  button.style.left = `${Math.round(Math.max(0, left))}px`;
+}
+
+function positionCourseAssignmentCalendarButtonForAssignment(assignment, button) {
+  const link = findCourseAssignmentTitleLink(assignment);
+  const titleElement = findCourseAssignmentTitleElement(link);
+  positionCourseAssignmentCalendarButton(button, titleElement);
+}
+
+function createGoogleCalendarIcon() {
+  const svgNamespace = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(svgNamespace, "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("class", "qdv-course-assignment-calendar-icon");
+  svg.setAttribute("aria-hidden", "true");
+  svg.setAttribute("focusable", "false");
+
+  const parts = [
+    ["path", { d: "M5 3h4v5H3V5a2 2 0 0 1 2-2z", fill: "#34a853" }],
+    ["path", { d: "M9 3h6v5H9z", fill: "#4285f4" }],
+    ["path", { d: "M15 3h4a2 2 0 0 1 2 2v3h-6z", fill: "#ea4335" }],
+    ["path", { d: "M3 8h18v4H3z", fill: "#4285f4" }],
+    ["path", { d: "M3 12h6v9H5a2 2 0 0 1-2-2z", fill: "#fbbc04" }],
+    ["path", { d: "M9 12h6v9H9z", fill: "#ffffff" }],
+    ["path", { d: "M15 12h6v7a2 2 0 0 1-2 2h-4z", fill: "#4285f4" }],
+    ["path", { d: "M8 3h8v3H8z", fill: "#ffffff", opacity: "0.95" }],
+    ["path", { d: "M10 15h4v1.5h-2.3v1.1h2.3V19h-4v-1.4h2.4v-1.1H10z", fill: "#3c4043" }]
+  ];
+
+  parts.forEach(([tagName, attributes]) => {
+    const element = document.createElementNS(svgNamespace, tagName);
+    Object.entries(attributes).forEach(([attrName, attrValue]) => {
+      element.setAttribute(attrName, attrValue);
+    });
+    svg.appendChild(element);
+  });
+
+  return svg;
+}
+
+function removeCourseAssignmentCalendarControl(assignment) {
+  if (!assignment.card) {
+    return;
+  }
+
+  assignment.card
+    .querySelectorAll(
+      `.${COURSE_ASSIGNMENT_CALENDAR_BUTTON_CLASS}[data-assignment-id="${escapeCssIdent(assignment.id)}"]`
+    )
+    .forEach((element) => {
+      removeAssignmentCalendarFallback(element.parentElement);
+      element.remove();
+    });
 }
 
 function findAssignmentMetadataContainer(card) {
@@ -5137,6 +5886,8 @@ function removeExistingCourseUi() {
   document.getElementById(COURSE_TOTAL_ID)?.remove();
   document.getElementById(COURSE_DELAY_BUCKET_PANEL_ID)?.remove();
   document.querySelectorAll(".qdv-course-delay").forEach((element) => element.remove());
+  document.querySelectorAll(`.${COURSE_ASSIGNMENT_CALENDAR_BUTTON_CLASS}`).forEach((element) => element.remove());
+  document.querySelectorAll(`.${ASSIGNMENT_CALENDAR_FALLBACK_CLASS}`).forEach((element) => element.remove());
   courseBucketEditor = null;
 }
 
@@ -5565,11 +6316,31 @@ async function renderAssignmentSidebarControls() {
   const delay = await getAssignmentPageEffectiveDelay(context);
   const assignmentState = await readAssignmentState();
   const done = isAssignmentDoneInState(assignmentState, assignmentId);
+  const deadlineData = extractDeadlineData();
+  const calendarData = createAssignmentCalendarDataFromDeadline(
+    context.courseId,
+    context.courseName,
+    context,
+    deadlineData
+  );
+  if (calendarData?.courseId) {
+    mergeAssignmentDeadlineCache(context.courseId, context, deadlineData).catch((error) => {
+      if (!isExtensionContextInvalidatedError(error)) {
+        console.warn("[Deadline Viewer] assignment deadline cache write failed", error);
+      }
+    });
+  }
+  const calendarControl = calendarData
+    ? await createAssignmentSidebarCalendarControl(calendarData)
+    : null;
 
   const panel = getOrCreateAssignmentSidebarPanel(sidebar);
   panel.replaceChildren(
-    createAssignmentSidebarDelayPanel(context, delay),
-    createAssignmentSidebarDoneControl(context, done)
+    ...[
+      calendarControl,
+      createAssignmentSidebarDelayPanel(context, delay),
+      createAssignmentSidebarDoneControl(context, done)
+    ].filter(Boolean)
   );
 }
 
@@ -5585,18 +6356,42 @@ async function getAssignmentPageStateContext(assignmentId) {
     assignmentId,
     id: assignmentId,
     courseId: String(mapping.courseId || ""),
+    courseName: normalizeText(mapping.courseName || getCourseNameFromAssignmentPage()),
     name: assignmentName,
     assignmentName
   };
 }
 
 function getAssignmentNameFromPage() {
+  const titleName = getAssignmentTitlePartFromPage(0);
+  if (titleName) {
+    return titleName;
+  }
+
   const heading = Array.from(document.querySelectorAll("h1, h2, h3")).find((element) => {
     const text = normalizeText(element.textContent || "");
     return text && !text.includes("ددلاین") && !text.includes("مهلت");
   });
 
   return normalizeText(heading?.textContent || document.title.split("|")[0] || "");
+}
+
+function getCourseNameFromAssignmentPage() {
+  return getAssignmentTitlePartFromPage(1);
+}
+
+function getAssignmentTitlePartFromPage(index) {
+  const titleParts = document.title
+    .split(" - ")
+    .map((part) => normalizeText(part.replace(/\s*\|\s*Quera\s*$/, "")))
+    .filter((part) => part && part !== "Quera");
+
+  if (!titleParts.length) {
+    return "";
+  }
+
+  const normalizedIndex = index < 0 ? titleParts.length + index : index;
+  return titleParts[normalizedIndex] || "";
 }
 
 async function getAssignmentPageEffectiveDelay(context) {
@@ -5617,7 +6412,7 @@ async function getAssignmentPageEffectiveDelay(context) {
 
   if (context.courseId) {
     const cache = await readAssignmentDelayCache(context.courseId, context.assignmentId);
-    if (cache) {
+    if (cache && cache.hasDelayData !== false) {
       const seconds = Math.max(0, Number(cache.delaySeconds) || 0);
       return {
         seconds,
@@ -5680,6 +6475,93 @@ function getDirectChildWithin(parent, element) {
   }
 
   return current?.parentElement === parent ? current : null;
+}
+
+async function createAssignmentSidebarCalendarControl(calendarData) {
+  const assignmentState = await readAssignmentState();
+  const promptStatus = getCalendarPromptStatus(assignmentState, calendarData);
+  const row = document.createElement("div");
+  row.className = "qdv-sidebar-calendar";
+
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = [
+    "qdv-calendar-button",
+    ASSIGNMENT_CALENDAR_BUTTON_CLASS,
+    promptStatus.current ? "is-added" : "",
+    promptStatus.changed ? "is-warning" : ""
+  ].filter(Boolean).join(" ");
+  button.textContent = promptStatus.changed
+    ? "به‌روزرسانی تقویم"
+    : promptStatus.current
+      ? "افزوده شده به تقویم"
+      : "افزودن به تقویم";
+  button.title = promptStatus.changed
+    ? "ددلاین تغییر کرده است؛ برای افزودن نسخه جدید به تقویم کلیک کنید"
+    : "افزودن ددلاین و هارد ددلاین به Google Calendar";
+  button.addEventListener("click", async (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    removeAssignmentCalendarFallback(row);
+    const opened = await openCalendarPrompts(calendarData, () => {
+      return renderAssignmentSidebarControls();
+    });
+
+    if (!opened) {
+      showAssignmentCalendarFallback(row, calendarData, () => {
+        return renderAssignmentSidebarControls();
+      });
+    }
+  });
+
+  row.appendChild(button);
+
+  if (promptStatus.changed) {
+    const warning = document.createElement("span");
+    warning.className = "qdv-calendar-warning";
+    warning.textContent = "ددلاین تغییر کرده";
+    row.appendChild(warning);
+  }
+
+  return row;
+}
+
+function showAssignmentCalendarFallback(container, calendarData, afterPrompt) {
+  if (!container) {
+    return;
+  }
+
+  removeAssignmentCalendarFallback(container);
+
+  const fallback = document.createElement("div");
+  fallback.className = ASSIGNMENT_CALENDAR_FALLBACK_CLASS;
+  fallback.dir = "rtl";
+
+  const label = document.createElement("span");
+  label.textContent = "باز کردن دستی:";
+  fallback.appendChild(label);
+
+  buildGoogleCalendarEvents(calendarData).forEach((event) => {
+    const link = document.createElement("a");
+    link.href = event.url;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.textContent = event.title;
+    link.addEventListener("click", async () => {
+      await setAssignmentCalendarPrompted(calendarData);
+      await afterPrompt?.();
+    }, { once: true });
+    fallback.appendChild(link);
+  });
+
+  container.appendChild(fallback);
+}
+
+function removeAssignmentCalendarFallback(container) {
+  container
+    ?.querySelectorAll(`.${ASSIGNMENT_CALENDAR_FALLBACK_CLASS}`)
+    .forEach((element) => element.remove());
 }
 
 function createAssignmentSidebarDelayPanel(context, delay) {
@@ -5972,7 +6854,7 @@ async function enrichAssignmentDelayCache() {
   const pageContext = getPageContext();
   const cache = await readAssignmentDelayCache(courseId, assignmentId);
 
-  if (cache) {
+  if (cache && cache.hasDelayData !== false) {
     const ttl = getEffectiveCacheTTL(cache, pageContext);
     if (ttl > 0 && Date.now() - Number(cache.fetchedAt) < ttl) {
       return;
@@ -5988,16 +6870,18 @@ async function enrichAssignmentDelayCache() {
 
     if (delays.length) {
       const deadlineData = extractDeadlineData();
-      const hardDeadlinePassed = deadlineData
-        ? deadlineData.serverNow.date >= deadlineData.hardFinishTime
-        : false;
+      const deadlineFields = createDeadlineCacheFields(deadlineData);
 
       await writeAssignmentDelayCache(
         courseId,
         { id: assignmentId, name: mapping.assignmentName || assignmentId },
-        Math.max(...delays),
-        COURSE_DELAY_STATUS.fresh,
-        hardDeadlinePassed
+        {
+          delaySeconds: Math.max(...delays),
+          delaySamples: delays,
+          fetchedAt: Date.now(),
+          status: COURSE_DELAY_STATUS.fresh,
+          ...deadlineFields
+        }
       );
       return;
     }
@@ -6012,13 +6896,7 @@ async function enrichAssignmentDelayCache() {
   try {
     const result = await fetchAssignmentDelay(assignment);
     recordRateLimitRequest();
-    await writeAssignmentDelayCache(
-      courseId,
-      assignment,
-      result.delaySeconds,
-      COURSE_DELAY_STATUS.fresh,
-      result.hardDeadlinePassed
-    );
+    await writeAssignmentDelayCache(courseId, assignment, result);
   } catch (error) {
     if (!isExtensionContextInvalidatedError(error)) {
       console.warn("[Deadline Viewer] assignment delay enrichment failed", error);

@@ -18,6 +18,8 @@ Fix Quera is a browser extension that improves Quera course and assignment pages
 - Supports bucket keywords, manual assignment include/exclude choices, days+hours capacity, and per-bucket rounding by none/hour/day.
 - Shows bucket progress bars, used/remaining capacity, and warnings when assignments are counted in more than one bucket.
 - Adds assignment-page controls for effective delay editing and marking an assignment as done.
+- Adds Google Calendar buttons for assignment deadlines and hard deadlines.
+- Shows one-time course-card Calendar buttons again when a deadline changes.
 - Adds local follow/unfollow controls for courses.
 - Shows a compact calendar-check indicator on followed course-list cards.
 - Filters Quera's upcoming-deadline widget to show only followed courses and assignments not marked done.
@@ -56,12 +58,12 @@ To load a local build:
 
 ## Permissions
 
-Fix Quera asks for access to Quera pages so it can read and improve the deadline/submission information shown there. It also uses browser extension storage for a local course-delay cache, local course delay-bucket settings, local assignment done state, and manual assignment delay overrides.
+Fix Quera asks for access to Quera pages so it can read and improve the deadline/submission information shown there. It also uses browser extension storage for a local course-delay cache, local course delay-bucket settings, local assignment done state, manual assignment delay overrides, and local Calendar prompt state.
 
 - `manifest.json`
 - `content.js`
 - `page-data-filter.js`
-The cached data stays in your browser. It is not sent to the developer or stored anywhere else by Fix Quera.
+The cached data stays in your browser. It is not sent to the developer or stored anywhere else by Fix Quera. When you click a Calendar button, Fix Quera opens prefilled Google Calendar pages in your browser; you still choose whether to save those events in Google Calendar.
 
 ## Compatibility
 
