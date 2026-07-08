@@ -2,6 +2,13 @@
 
 All notable changes to fix-quera are documented in this file.
 
+## v0.5.4 - 2026-07-08
+
+- Added Google Calendar prompt buttons on assignment pages and course assignment cards for normal and hard deadlines.
+- Kept course-card Calendar prompts hidden after use until the assignment deadline signature changes.
+- Stored deadline, hard-deadline, extra-time, and observed delay details in the existing assignment delay cache so incomplete cache entries are repopulated before use.
+- Refined assignment delay badge coloring so zero-delay fresh values use the same fresh styling as non-zero values.
+
 ## v0.5.3 - 2026-07-07
 
 - Added local assignment done state and manual assignment delay overrides.
