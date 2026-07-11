@@ -6,12 +6,13 @@ Fix Quera is a browser extension that improves Quera course and assignment pages
 
 - Shows the normal deadline and hard deadline on assignment pages.
 - Shows whether an assignment is in normal time, extra time, or finished.
-- Shows the configured extra-time window as `مهلت اضافه`.
+- Shows the configured extra-time window as `مهلت اضافه`, rounded down (and in minutes when under three hours).
 - Shows elapsed delay as `در تاخیر` when the normal deadline has passed but the hard deadline has not.
-- Formats durations in Persian, with Persian digits, such as `۳ روز و ۲۳ ساعت`.
+- Formats durations and near-deadline timestamps in Persian digits, such as `۳ روز و ۲۳ ساعت`.
 - Replaces Quera's `ضریب نمره` / `ضریب تاخیر` submission-table column with `میزان تاخیر`.
 - Adds a `میزان تاخیر` column when Quera does not provide one, computing delay from the assignment deadline and each submission timestamp.
 - Shows per-assignment final-submission delay badges on course pages.
+- Distinguishes zero-delay submissions (`بدون تاخیر`) from assignments with no final submissions (`بدون ارسال`) when submission data is available.
 - Lets you click course-page delay badges to set or clear a manual delay override.
 - Shows `مجموع تاخیر` on course pages as the sum of displayed per-assignment delays.
 - Adds local per-course delay budget buckets in the `درسنامه‌ها` section.

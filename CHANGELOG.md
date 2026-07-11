@@ -2,6 +2,13 @@
 
 All notable changes to fix-quera are documented in this file.
 
+## v0.5.5 - 2026-07-11
+
+- Rounded extra-time allowances down while continuing to round used delay up.
+- Displayed extra-time allowances under three hours in minutes.
+- Displayed deadlines within 24 hours as Persian-digit timestamps, with the date shown on hover; deadlines farther away keep the inverse presentation.
+- Replaced zero-hour delay labels with `بدون تاخیر`, and used `بدون ارسال` when cached submission data confirms there are no final submissions.
+
 ## v0.5.4 - 2026-07-08
 
 - Added Google Calendar prompt buttons on assignment pages and course assignment cards for normal and hard deadlines.
