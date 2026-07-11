@@ -200,8 +200,8 @@ function getDeadlineDaypart(date) {
   return "عصر";
 }
 
-function formatHoverTime(date) {
-  return new Intl.DateTimeFormat("en-GB", {
+function formatDeadlineTime(date) {
+  return new Intl.DateTimeFormat("fa-IR", {
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
@@ -214,7 +214,7 @@ function getDeadlineDetail(result) {
   if (result.serverNow.date < result.finishTime.date) {
     return {
       label: "مهلت اضافه",
-      value: formatCompactDuration(result.extraTimeSeconds),
+      value: formatAllowanceDuration(result.extraTimeSeconds),
       className: "has-warning",
       warning:
         "ممکن است این مهلت اضافه عمدا توسط دستیار آموزشی تنظیم نشده باشد."
@@ -266,10 +266,10 @@ function createDeadlineBar(result, detail) {
 
   inline.appendChild(createStatusDot(result.status));
   if (isSameTime(result.finishTime.date, result.hardFinishTime)) {
-    inline.appendChild(createDateItem("(هارد) ددلاین", result.finishTime.date));
+    inline.appendChild(createDateItem("(هارد) ددلاین", result.finishTime.date, result.serverNow.date));
   } else {
-    inline.appendChild(createDateItem("ددلاین", result.finishTime.date));
-    inline.appendChild(createDateItem("هارد ددلاین", result.hardFinishTime));
+    inline.appendChild(createDateItem("ددلاین", result.finishTime.date, result.serverNow.date));
+    inline.appendChild(createDateItem("هارد ددلاین", result.hardFinishTime, result.serverNow.date));
   }
 
   if (detail) {
@@ -295,7 +295,7 @@ function createStatusDot(status) {
   return statusElement;
 }
 
-function createDateItem(label, date) {
+function createDateItem(label, date, serverNow) {
   const item = document.createElement("div");
   item.className = "qdv-deadline";
 
@@ -304,12 +304,16 @@ function createDateItem(label, date) {
   labelElement.textContent = label;
 
   const dateElement = document.createElement("time");
-  const hoverTime = formatHoverTime(date);
+  const formattedDate = formatDeadlineDate(date);
+  const formattedTime = formatDeadlineTime(date);
+  const isWithinOneDay =
+    Math.abs(date.getTime() - serverNow.getTime()) < 24 * 60 * 60 * 1000;
+  const hoverValue = isWithinOneDay ? formattedDate : formattedTime;
   dateElement.className = "qdv-date";
   dateElement.dateTime = date.toISOString();
-  dateElement.dataset.time = hoverTime;
-  dateElement.title = hoverTime;
-  dateElement.textContent = formatDeadlineDate(date);
+  dateElement.dataset.time = hoverValue;
+  dateElement.title = hoverValue;
+  dateElement.textContent = isWithinOneDay ? formattedTime : formattedDate;
 
   item.append(labelElement, dateElement);
   return item;
@@ -2386,11 +2390,38 @@ function isGregorianLeapYear(year) {
 }
 
 function formatDelay(totalSeconds) {
+  if (Math.max(0, Number(totalSeconds) || 0) === 0) {
+    return "بدون تاخیر";
+  }
+
   return formatCompactDuration(totalSeconds);
 }
 
 function formatCompactDuration(totalSeconds) {
   const roundedHours = Math.ceil(Math.max(0, totalSeconds) / 3600);
+  const days = Math.floor(roundedHours / 24);
+  const hours = roundedHours % 24;
+
+  if (days && hours) {
+    return `${formatPersianNumber(days)} روز و ${formatPersianNumber(hours)} ساعت`;
+  }
+
+  if (days) {
+    return `${formatPersianNumber(days)} روز`;
+  }
+
+  return `${formatPersianNumber(hours)} ساعت`;
+}
+
+function formatAllowanceDuration(totalSeconds) {
+  const safeSeconds = Math.max(0, Number(totalSeconds) || 0);
+  const totalMinutes = Math.floor(safeSeconds / 60);
+
+  if (totalMinutes < 180) {
+    return `${formatPersianNumber(totalMinutes)} دقیقه`;
+  }
+
+  const roundedHours = Math.floor(safeSeconds / 3600);
   const days = Math.floor(roundedHours / 24);
   const hours = roundedHours % 24;
 
@@ -3661,6 +3692,7 @@ function createCourseDelayState(courseId, courseName, assignments, assignmentSta
     assignmentState,
     delaySecondsByAssignment: new Map(),
     delayHoursByAssignment: new Map(),
+    delayLabelByAssignment: new Map(),
     statusByAssignment: new Map(),
     failedAssignments: new Set(),
     pendingAssignments: new Set(assignments.map((assignment) => assignment.id))
@@ -3705,6 +3737,10 @@ async function hydrateCourseDelayState(state) {
     if (finishTime && finishTime.getTime() > now) {
       applyAssignmentDelayResult(state, assignment, {
         delaySeconds: 0,
+        delaySamples:
+          cache?.hasDelayData !== false && Array.isArray(cache?.delaySamples)
+            ? cache.delaySamples
+            : undefined,
         fetchedAt: now,
         status: COURSE_DELAY_STATUS.fresh,
         normalDeadline: cache?.normalDeadline,
@@ -3724,6 +3760,7 @@ async function hydrateCourseDelayState(state) {
 
       applyAssignmentDelayResult(state, assignment, {
         delaySeconds: Number(cache.delaySeconds) || 0,
+        delaySamples: Array.isArray(cache.delaySamples) ? cache.delaySamples : undefined,
         fetchedAt: Number(cache.fetchedAt) || 0,
         status: isFresh ? COURSE_DELAY_STATUS.fresh : COURSE_DELAY_STATUS.stale,
         normalDeadline: cache.normalDeadline,
@@ -4019,6 +4056,10 @@ function applyAssignmentDelayResult(state, assignment, result) {
     Boolean(result.manual) ||
     hasAssignmentDelayOverride(state.assignmentState, assignment.id);
   const hadKnownValue = state.delaySecondsByAssignment.has(assignment.id);
+  const delayLabel = getDelayDisplayLabel(delaySeconds, {
+    hasManualOverride,
+    delaySamples: result.delaySamples
+  });
 
   state.pendingAssignments.delete(assignment.id);
   state.statusByAssignment.set(assignment.id, status);
@@ -4030,7 +4071,8 @@ function applyAssignmentDelayResult(state, assignment, result) {
       insertAssignmentDelayBadge(
         assignment,
         status,
-        formatRoundedHours(state.delayHoursByAssignment.get(assignment.id)),
+        state.delayLabelByAssignment.get(assignment.id) ||
+          formatRoundedHours(state.delayHoursByAssignment.get(assignment.id)),
         { hasManualOverride }
       );
     } else {
@@ -4045,14 +4087,27 @@ function applyAssignmentDelayResult(state, assignment, result) {
 
   state.delaySecondsByAssignment.set(assignment.id, delaySeconds);
   state.delayHoursByAssignment.set(assignment.id, delayHours);
+  state.delayLabelByAssignment.set(assignment.id, delayLabel);
   insertAssignmentDelayBadge(
     assignment,
     status,
-    formatRoundedHours(delayHours),
+    delayLabel,
     { hasManualOverride }
   );
   renderCourseAssignmentCalendarFromDelayResult(state, assignment, result);
   updateCourseTotalBadge(state);
+}
+
+function getDelayDisplayLabel(delaySeconds, options = {}) {
+  if (
+    !options.hasManualOverride &&
+    Array.isArray(options.delaySamples) &&
+    options.delaySamples.length === 0
+  ) {
+    return "بدون ارسال";
+  }
+
+  return formatDelay(delaySeconds);
 }
 
 function waitForCourseQueueDelay() {
@@ -4071,10 +4126,14 @@ function insertAssignmentDelayBadge(assignment, status, value, options = {}) {
   badge.className = `qdv-course-delay qdv-assignment-delay is-${status}`;
   badge.classList.toggle("has-override", Boolean(options.hasManualOverride));
   badge.title = getAssignmentDelayTitle(status, options);
-  badge.replaceChildren(
-    document.createTextNode("تاخیر"),
-    createCourseDelayValue(value)
-  );
+  if (value === "بدون ارسال" || value === "بدون تاخیر") {
+    badge.replaceChildren(document.createTextNode(value));
+  } else {
+    badge.replaceChildren(
+      document.createTextNode("تاخیر"),
+      createCourseDelayValue(value)
+    );
+  }
 }
 
 function getOrCreateAssignmentDelayBadge(assignment) {
@@ -4641,7 +4700,7 @@ function updateCourseTotalBadge(state) {
       : "مجموع تاخیر ارسال‌های نهایی";
   total.replaceChildren(
     document.createTextNode("مجموع تاخیر"),
-    createCourseDelayValue(hasAllValues ? formatRoundedHours(totalHours) : "...")
+    createCourseDelayValue(hasAllValues ? formatDelay(totalHours * 3600) : "...")
   );
 
   scheduleDelayBucketPanelRender(state);
@@ -5411,7 +5470,7 @@ function createDelayBucketCardHead(courseDelayState, bucket, summary) {
 
   const capacity = document.createElement("div");
   capacity.className = "qdv-bucket-card-capacity";
-  capacity.textContent = `ظرفیت ${formatBucketHours(summary.capacityHours)}`;
+  capacity.textContent = `ظرفیت ${formatAllowanceHours(summary.capacityHours)}`;
 
   titleWrap.append(name, capacity);
 
@@ -5519,10 +5578,12 @@ function createDelayBucketMetrics(summary) {
   const metrics = document.createElement("div");
   metrics.className = "qdv-bucket-metrics";
   metrics.append(
-    createDelayBucketMetric("مصرف‌شده", formatBucketHours(summary.usedHours)),
+    createDelayBucketMetric("مصرف‌شده", formatUsedHours(summary.usedHours)),
     createDelayBucketMetric(
       summary.remainingHours < 0 ? "بیش از ظرفیت" : "باقی‌مانده",
-      formatBucketHours(Math.abs(summary.remainingHours)),
+      summary.remainingHours < 0
+        ? formatUsedHours(Math.abs(summary.remainingHours))
+        : formatAllowanceHours(summary.remainingHours),
       summary.remainingHours < 0
     )
   );
@@ -5710,9 +5771,12 @@ function createDelayBucketAddList(courseDelayState, bucket) {
 function getDelayBucketAssignmentMeta(courseDelayState, assignment, chargedHours) {
   const status = courseDelayState.statusByAssignment.get(assignment.id);
   const hasKnownDelay = courseDelayState.delaySecondsByAssignment.has(assignment.id);
+  const delayValue = chargedHours > 0
+    ? formatUsedHours(chargedHours)
+    : courseDelayState.delayLabelByAssignment.get(assignment.id) || formatUsedHours(0);
   if (status === COURSE_DELAY_STATUS.loading || courseDelayState.pendingAssignments.has(assignment.id)) {
     if (hasKnownDelay) {
-      return `تاخیر ذخیره‌شده: ${formatBucketHours(chargedHours || 0)}؛ در صف به‌روزرسانی`;
+      return `تاخیر ذخیره‌شده: ${delayValue}؛ در صف به‌روزرسانی`;
     }
 
     return "در صف دریافت تاخیر";
@@ -5720,7 +5784,7 @@ function getDelayBucketAssignmentMeta(courseDelayState, assignment, chargedHours
 
   if (status === COURSE_DELAY_STATUS.error) {
     if (hasKnownDelay) {
-      return `تاخیر ذخیره‌شده: ${formatBucketHours(chargedHours || 0)}؛ به‌روزرسانی ناموفق`;
+      return `تاخیر ذخیره‌شده: ${delayValue}؛ به‌روزرسانی ناموفق`;
     }
 
     return "دریافت ناموفق";
@@ -5730,7 +5794,7 @@ function getDelayBucketAssignmentMeta(courseDelayState, assignment, chargedHours
     return "تاخیر نامشخص";
   }
 
-  return `تاخیر محاسبه‌شده: ${formatBucketHours(chargedHours || 0)}`;
+  return `تاخیر محاسبه‌شده: ${delayValue}`;
 }
 
 async function setDelayBucketAssignmentMembership(courseId, bucket, assignment, included) {
@@ -5858,8 +5922,17 @@ function doesAssignmentMatchDelayBucketKeyword(bucket, assignment) {
     .includes(keyword);
 }
 
-function formatBucketHours(hours) {
+function formatUsedHours(hours) {
+  if (Math.max(0, Number(hours) || 0) === 0) {
+    return "بدون تاخیر";
+  }
+
   return formatRoundedHours(Math.ceil(Math.max(0, Number(hours) || 0)));
+}
+
+function formatAllowanceHours(hours) {
+  const safeHours = Math.floor(Math.max(0, Number(hours) || 0));
+  return formatCompactDuration(safeHours * 3600);
 }
 
 function findCourseAssignmentsHeading() {
@@ -6395,7 +6468,7 @@ async function getAssignmentPageEffectiveDelay(context) {
   if (manualDelaySeconds !== null) {
     return {
       seconds: manualDelaySeconds,
-      label: formatCompactDuration(manualDelaySeconds),
+      label: formatDelay(manualDelaySeconds),
       hasManualOverride: true,
       loading: false
     };
@@ -6407,7 +6480,7 @@ async function getAssignmentPageEffectiveDelay(context) {
       const seconds = Math.max(0, Number(cache.delaySeconds) || 0);
       return {
         seconds,
-        label: formatCompactDuration(seconds),
+        label: getDelayDisplayLabel(seconds, { delaySamples: cache.delaySamples }),
         hasManualOverride: false,
         loading: false
       };
@@ -6569,7 +6642,11 @@ function createAssignmentSidebarDelayPanel(context, delay) {
   value.className = "qdv-sidebar-delay-value";
   value.textContent = delay.label;
 
-  text.append(label, value);
+  if (delay.label === "بدون ارسال" || delay.label === "بدون تاخیر") {
+    text.append(value);
+  } else {
+    text.append(label, value);
+  }
 
   const edit = document.createElement("button");
   edit.type = "button";
