@@ -51,7 +51,7 @@ Fix Quera has one purpose: to improve how deadline, extra-time, and submission-d
 ```text
 Host access to https://quera.org/*: The extension reads deadline, assignment, course, and submission values already present on Quera pages, and injects the delay and deadline UI into those pages. It runs nowhere else.
 
-storage: Used to keep a local 10-minute cache of course delay results, plus the user's local settings: delay buckets, follow choices, assignment done state, manual delay overrides, and Calendar prompt state. This data never leaves the device.
+storage: Used to keep a short-lived local cache of course delay results, refreshed as deadlines approach and expiring on its own, plus the user's local settings: delay buckets, follow choices, assignment done state, manual delay overrides, and Calendar prompt state. This data never leaves the device.
 
 Remote code: None. The extension ships only manifest.json, content.js, and page-data-filter.js.
 ```
