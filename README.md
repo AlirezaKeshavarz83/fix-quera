@@ -6,16 +6,6 @@ Fix Quera is a browser extension for Chrome and Firefox that makes Quera course 
 
 Everything runs inside your browser. Fix Quera stores its settings and cached data locally and does not send your Quera data to the developer.
 
-## Motivation
-
-I spent about a year asking Quera for this. Not once, and not vaguely: concrete, small UX requests, sent repeatedly, about information their own pages already have and simply do not show. Nothing happened.
-
-That is the part I find hard to accept. These are not expensive features. They are the difference between a student knowing where they stand and a student guessing, every single week, on a platform they are required to use. Choosing not to fix that is a choice about how much your users' time is worth.
-
-So I stopped waiting. A few weekends of work turned into something that answers those questions for anyone who installs it, on every course they take, for as long as it keeps working. That trade is absurdly good, and it is available to anyone who is annoyed enough to take it.
-
-If Quera ships these things properly one day, this extension becomes unnecessary and I will be glad. Until then, it exists.
-
 ## Features
 
 ### See the real deadline picture
