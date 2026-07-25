@@ -1,12 +1,12 @@
 # Fix Quera
 
-Quera tells you when an assignment is due. It does not tell you how late you actually are, how much extra time you have left, or how much of your delay budget you have already burned.
+Quera has the information you need; it just does not always show it clearly.
 
-Fix Quera is a browser extension that adds that missing layer. It reads what is already on the Quera page and turns it into the numbers students actually track: real delay, remaining extra time, and a per-course delay budget you can plan against.
+Fix Quera is a browser extension for Chrome and Firefox that makes Quera course and assignment pages easier to understand and manage. It surfaces deadlines and submission delays, helps you track delay allowances, filters upcoming work, and lets you add deadlines directly to Google Calendar.
 
-Everything is computed and stored locally in your browser. No account, no server, no tracking.
+Everything runs inside your browser. Fix Quera stores its settings and cached data locally and does not send your Quera data to the developer.
 
-## What it does
+## Features
 
 ### See the real deadline picture
 
@@ -41,62 +41,72 @@ Everything is computed and stored locally in your browser. No account, no server
 - Google Calendar buttons on assignment pages for both the deadline and the hard deadline.
 - One-time Calendar buttons on course cards that come back when a deadline changes.
 
-## Privacy
+### Built to stay out of the way
 
-Fix Quera only runs on `https://quera.org/*`. It reads deadline, assignment, course, and submission values that are already in the page, and keeps its cache and your settings in local extension storage. Nothing is sent to the developer or to any third party. Calendar buttons just open a prefilled Google Calendar page; saving the event is still your choice.
-
-Full details are in [PRIVACY.md](PRIVACY.md).
+- Works automatically on Quera pages after installation.
+- Supports Quera's client-side navigation without requiring page reloads.
+- Fits both the light and dark Quera interfaces.
+- Available for Chrome and Firefox.
 
 ## Install
 
 - [Chrome Web Store](https://chromewebstore.google.com/detail/ipdgalbogcfdhhjcjljkcpnalkpiehle?utm_source=github&utm_medium=readme&utm_campaign=repo_readme&utm_content=chrome)
-- [Firefox Add-on](https://addons.mozilla.org/en-GB/firefox/addon/fix-quera/?utm_source=github&utm_medium=readme&utm_campaign=repo_readme&utm_content=firefox)
+- [Firefox Add-ons](https://addons.mozilla.org/en-GB/firefox/addon/fix-quera/?utm_source=github&utm_medium=readme&utm_campaign=repo_readme&utm_content=firefox)
 
-### Load a local build
+## Privacy and permissions
 
-Chrome:
+Fix Quera runs only on quera.org.
 
-1. Open `chrome://extensions/`.
-2. Enable Developer mode.
-3. Click Load unpacked.
-4. Select this project directory.
+It uses browser extension storage for local settings such as followed courses, completed assignments, manual delay corrections, delay-budget groups, Calendar prompts, and cached delay information.
+
+This data stays in your browser. Fix Quera does not send it to the developer or store it on an external server.
+
+When you use a Calendar button, the extension opens a prefilled Google Calendar page. Nothing is added until you choose to save the event yourself.
+
+Full details are in [PRIVACY.md](PRIVACY.md).
+
+## Install locally
+
+### Chrome
+
+1. Clone or download this repository.
+2. Open `chrome://extensions/`.
+3. Enable Developer mode.
+4. Select Load unpacked.
+5. Choose the project directory.
+6. Reload any Quera tabs that were already open.
+
+### Firefox
+
+1. Clone or download this repository.
+2. Open `about:debugging#/runtime/this-firefox`.
+3. Select Load Temporary Add-on.
+4. Choose `manifest.json`.
 5. Reload any Quera tabs that were already open.
-
-Firefox:
-
-1. Open `about:debugging#/runtime/this-firefox`.
-2. Click Load Temporary Add-on.
-3. Select `manifest.json` from this project directory.
-4. Reload any Quera tabs that were already open.
-
-## How it works
-
-The release package is three files: `manifest.json`, `content.js`, and `page-data-filter.js`.
-
-- `content.js` runs in the isolated world and owns everything visible: injected controls, delay tags, storage, and course/assignment mapping.
-- `page-data-filter.js` runs in the page world (`world: "MAIN"`) so it can filter Quera's Next.js data before the deadline widget renders.
-- Course delay results are cached for 10 minutes, and stale entries refresh through a queue throttled to one request per second.
-- Quera is a single-page app, so route changes are detected and handled without a manual reload.
-
-The current manifest has been accepted as a temporary add-on in Firefox 152.0.3. If a future Firefox version rejects `world: "MAIN"`, keep Chrome behavior intact and split Chrome/Firefox package generation instead of weakening the Chrome manifest.
 
 ## Development
 
-Build a release package:
+Create a release package with:
 
 ```sh
-scripts/package-release.sh 0.5.5
+scripts/package-release.sh <version>
 ```
 
-Useful local checks:
+Useful checks:
 
 ```sh
-node -e "JSON.parse(require('fs').readFileSync('manifest.json','utf8'))"
+node -e "JSON.parse(require('fs').readFileSync('manifest.json', 'utf8'))"
 node --check content.js
 node --check page-data-filter.js
 scripts/package-release.sh <version>
 ```
 
-The project uses [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `docs:`, `chore:`). Local experiments, captures, and generated zips belong in `.local/` and should not be committed.
+The release package contains:
 
-Release notes live in [CHANGELOG.md](CHANGELOG.md), store listing copy in [docs/store-listing.md](docs/store-listing.md), and maintainer/agent guidance in [AGENTS.md](AGENTS.md).
+- `manifest.json`
+- `content.js`
+- `page-data-filter.js`
+
+The project uses [Conventional Commits](https://www.conventionalcommits.org/) for commit messages. Local experiments, captures, and generated zips belong in `.local/` and should not be committed.
+
+Release notes are available in [CHANGELOG.md](CHANGELOG.md), store listing copy in [docs/store-listing.md](docs/store-listing.md), and maintainer guidance in [AGENTS.md](AGENTS.md).
