@@ -7,7 +7,8 @@ This repository contains a small WebExtension for improving Quera course and ass
 - Treat `content.js` as the isolated extension entrypoint for UI, extension storage, course metadata collection, assignment mapping, and delay tags.
 - Treat `page-data-filter.js` as the page-world data-filter entrypoint. It must not touch extension storage APIs, buttons, menus, delay tags, or DOM outside `#__NEXT_DATA__`.
 - Keep route-specific behavior gated by the current Quera URL. The manifest intentionally injects on `https://quera.org/*` so client-side navigation can be detected, but expensive work should stay limited to course and assignment pages.
-- Keep `manifest.json` permissions aligned with the real behavior of the extension. If storage, host access, or data handling changes, update `PRIVACY.md`, `README.md`, and store-review text together.
+- Keep `manifest.json` permissions aligned with the real behavior of the extension. If storage, host access, or data handling changes, update `PRIVACY.md`, `README.md`, and `docs/store-listing.md` together.
+- `docs/store-listing.md` is the canonical Chrome Web Store and AMO listing copy. Update it in the same PR as any user-visible feature or permission change, then paste it into the store dashboards at release time.
 
 ## Visual Style
 
