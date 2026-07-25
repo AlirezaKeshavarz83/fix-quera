@@ -24,18 +24,12 @@ Quera has the information you need; it just does not always show it clearly.
 Fix Quera improves Quera course and assignment pages so you can quickly understand when an assignment is due, how much delay you have used, and what work is still left.
 
 With Fix Quera, you can:
-• See the normal deadline and hard deadline together, and whether an assignment is in normal time, extra time (مهلت اضافه), or already closed.
-• Watch your delay grow live (در تاخیر) between the normal deadline and the hard deadline.
-• Read the final-submission delay for each assignment (میزان تاخیر) and the total delay for a course (مجموع تاخیر), instead of Quera's ضریب نمره / ضریب تاخیر column.
-• Tell an assignment submitted on time (بدون تاخیر) apart from one you never submitted (بدون ارسال).
-• Organise extra-time allowances into separate delay budgets, and track how much of each budget has been used and how much remains.
-• Manually correct an assignment's displayed delay, or mark it as done.
-• Follow selected courses and keep Quera's upcoming-deadlines section focused on relevant, unfinished work.
+• See how late each submission actually was (میزان تاخیر) and how much delay a course has cost you in total (مجموع تاخیر), instead of Quera's ضریب نمره / ضریب تاخیر column.
+• Organise your extra-time allowances into separate delay budgets, and always know how much of each budget is used and how much is left.
+• Keep Quera's upcoming-deadlines section down to the courses you follow and the work you have not finished yet.
 • Add normal deadlines and hard deadlines to Google Calendar.
-
-Durations and near deadlines are shown in Persian digits, such as ۳ روز و ۲۳ ساعت.
-
-Fix Quera runs automatically on Quera pages after installation, follows Quera's client-side navigation without page reloads, and fits both the light and dark Quera interfaces.
+• See the normal deadline and hard deadline together, whether an assignment is in normal time, extra time (مهلت اضافه), or closed, and how much delay is accumulating right now (در تاخیر).
+• Correct an assignment's delay yourself when the computed value is wrong, and have that correction carry through course totals and delay budgets.
 
 Privacy: Fix Quera runs only on quera.org. It uses extension storage for local settings and a local cache, and everything stays in your browser. No account, no server, no analytics, no remote code. Calendar buttons only open a prefilled Google Calendar page; saving the event is still your choice.
 
@@ -84,18 +78,12 @@ Quera has the information you need; it just does not always show it clearly.
 Fix Quera improves Quera course and assignment pages so you can quickly understand when an assignment is due, how much delay you have used, and what work is still left.
 
 With Fix Quera, you can:
-- See the normal deadline and hard deadline together, and whether an assignment is in normal time, extra time (مهلت اضافه), or already closed.
-- Watch your delay grow live (در تاخیر) between the normal deadline and the hard deadline.
-- Read the final-submission delay for each assignment (میزان تاخیر) and the total delay for a course (مجموع تاخیر), instead of Quera's ضریب نمره / ضریب تاخیر column.
-- Tell an assignment submitted on time (بدون تاخیر) apart from one you never submitted (بدون ارسال).
-- Organise extra-time allowances into separate delay budgets, and track how much of each budget has been used and how much remains.
-- Manually correct an assignment's displayed delay, or mark it as done.
-- Follow selected courses and keep Quera's upcoming-deadlines section focused on relevant, unfinished work.
+- See how late each submission actually was (میزان تاخیر) and how much delay a course has cost you in total (مجموع تاخیر), instead of Quera's ضریب نمره / ضریب تاخیر column.
+- Organise your extra-time allowances into separate delay budgets, and always know how much of each budget is used and how much is left.
+- Keep Quera's upcoming-deadlines section down to the courses you follow and the work you have not finished yet.
 - Add normal deadlines and hard deadlines to Google Calendar.
-
-Durations and near deadlines are shown in Persian digits, such as ۳ روز و ۲۳ ساعت.
-
-Fix Quera runs automatically on Quera pages after installation, follows Quera's client-side navigation without page reloads, and fits both the light and dark Quera interfaces.
+- See the normal deadline and hard deadline together, whether an assignment is in normal time, extra time (مهلت اضافه), or closed, and how much delay is accumulating right now (در تاخیر).
+- Correct an assignment's delay yourself when the computed value is wrong, and have that correction carry through course totals and delay budgets.
 
 Privacy: Fix Quera runs only on quera.org, collects no data, and sends nothing anywhere. Its cache and your settings live in local extension storage. No analytics, no remote code, no account.
 
