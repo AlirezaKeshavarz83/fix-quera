@@ -33,7 +33,7 @@ Everything runs inside your browser. Fix Quera stores its settings and cached da
 
 - Follow or unfollow courses locally, and filter Quera's upcoming-deadline widget down to followed courses only.
 - Mark an assignment as done to drop it from that widget.
-- Override an assignment's delay by hand when the computed value does not match reality (click a course-page badge, or edit it on the assignment page). Overrides flow into course totals and buckets.
+- Set an assignment's delay by hand when the real story is not on Quera, such as an assignment sent by email after the hard deadline (click a course-page badge, or edit it on the assignment page). Overrides flow into course totals and buckets.
 - Active courses start as followed and archived courses as unfollowed, until you choose otherwise. Clearing extension data resets to those defaults.
 
 ### Get deadlines into your calendar
