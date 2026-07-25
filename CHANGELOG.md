@@ -2,6 +2,11 @@
 
 All notable changes to fix-quera are documented in this file.
 
+## v0.5.6 - 2026-07-25
+
+- Rewrote the README and extension description in English, grouped by what each feature is for.
+- Added `docs/store-listing.md` with the canonical Chrome Web Store and Firefox Add-ons listing copy.
+
 ## v0.5.5 - 2026-07-11
 
 - Rounded extra-time allowances down while continuing to round used delay up.
