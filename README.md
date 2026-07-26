@@ -106,6 +106,10 @@ The release package contains:
 - `manifest.json`
 - `content.js`
 - `page-data-filter.js`
+- `icons/icon-16.png`
+- `icons/icon-32.png`
+- `icons/icon-48.png`
+- `icons/icon-128.png`
 
 The project uses [Conventional Commits](https://www.conventionalcommits.org/) for commit messages. Local experiments, captures, and generated zips belong in `.local/` and should not be committed.
 

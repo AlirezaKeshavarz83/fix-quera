@@ -53,7 +53,7 @@ Host access to https://quera.org/*: The extension reads deadline, assignment, co
 
 storage: Used to keep a short-lived local cache of course delay results, refreshed as deadlines approach and expiring on its own, plus the user's local settings: delay buckets, follow choices, assignment done state, manual delay overrides, and Calendar prompt state. This data never leaves the device.
 
-Remote code: None. The extension ships only manifest.json, content.js, and page-data-filter.js.
+Remote code: None. The extension ships only local files: manifest.json, content.js, page-data-filter.js, and the four icon assets under icons/.
 ```
 
 ## Firefox Add-ons (AMO)
