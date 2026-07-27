@@ -2,8 +2,6 @@
 
 Canonical text for the Chrome Web Store and Firefox Add-ons (AMO) listings. Keep this file, `README.md`, `PRIVACY.md`, and the `manifest.json` description in sync when behavior changes.
 
-The Chrome Web Store listing icon is `assets/store-icon-128.png`. It is a separate, padded store asset; the manifest icons under `icons/` are the extension package icons.
-
 ## Chrome Web Store
 
 ### Name
