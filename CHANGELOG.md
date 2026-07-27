@@ -5,6 +5,7 @@ All notable changes to fix-quera are documented in this file.
 ## v0.5.7 - 2026-07-26
 
 - Added the user's original artwork with a transparent background at 16px, 32px, 48px, and 128px sizes.
+- Added the reproducible Chrome Web Store listing icon at `assets/store-icon-128.png`.
 - Included the icon files in Chrome and Firefox release archives.
 
 ## v0.5.6 - 2026-07-25
