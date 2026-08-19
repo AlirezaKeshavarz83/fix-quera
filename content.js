@@ -6,7 +6,8 @@ const COURSE_TOTAL_ID = "deadline-viewer-course-total";
 const COURSE_CACHE_PREFIX = "qdv-course-delay";
 const COURSE_DELAY_BUCKETS_KEY = "qdv-course-delay-buckets:v1";
 const COURSE_DELAY_BUCKET_PANEL_ID = "deadline-viewer-delay-buckets";
-const DELAY_BUCKET_PROGRESS_SEGMENT_GAP_PERCENT = 0.75;
+const DELAY_BUCKET_PROGRESS_SEGMENT_GAP_PX = 4;
+const DELAY_BUCKET_PROGRESS_MIN_SEGMENT_PX = 8;
 const COURSE_FOLLOW_STATE_KEY = "qdv-course-follow-state:v1";
 const COURSE_FOLLOW_STATE_MIRROR_KEY = "qdv-course-follow-state-mirror:v1";
 const ASSIGNMENT_STATE_KEY = "qdv-assignment-state:v1";
@@ -5837,15 +5838,29 @@ function createDelayBucketProgress(summary) {
   fill.style.width = `${usedPercent}%`;
   progress.appendChild(fill);
 
-  const hasConfirmedSegmentGap = usedPercent > 0
-    && unsubmittedPercent > DELAY_BUCKET_PROGRESS_SEGMENT_GAP_PERCENT;
-
-  if (unsubmittedPercent > 0 && (!usedPercent || hasConfirmedSegmentGap)) {
+  if (unsubmittedPercent > 0) {
     const unsubmittedFill = document.createElement("div");
     unsubmittedFill.className = "qdv-bucket-progress-fill is-unsubmitted";
-    const gapPercent = usedPercent ? DELAY_BUCKET_PROGRESS_SEGMENT_GAP_PERCENT : 0;
-    unsubmittedFill.style.left = `calc(${usedPercent}% + ${gapPercent}%)`;
-    unsubmittedFill.style.width = `calc(${unsubmittedPercent}% - ${gapPercent}%)`;
+    const gap = `${DELAY_BUCKET_PROGRESS_SEGMENT_GAP_PX}px`;
+    const minimumWidth = `${DELAY_BUCKET_PROGRESS_MIN_SEGMENT_PX}px`;
+    const hasConfirmedSegment = usedPercent > 0;
+    const overflowCorrection = hasConfirmedSegment
+      ? `max(0px, calc(${usedPercent}% + ${gap} + ${minimumWidth} - 100%))`
+      : "0px";
+    const confirmedWidth = hasConfirmedSegment
+      ? `calc(${usedPercent}% - ${overflowCorrection})`
+      : "0%";
+    const availableWidth = hasConfirmedSegment
+      ? `calc(100% - ${usedPercent}% + ${overflowCorrection} - ${gap})`
+      : "100%";
+
+    unsubmittedFill.style.left = hasConfirmedSegment
+      ? `calc(${usedPercent}% - ${overflowCorrection} + ${gap})`
+      : "0%";
+    unsubmittedFill.style.width = `min(max(${minimumWidth}, ${hasConfirmedSegment
+      ? `calc(${unsubmittedPercent}% - ${gap})`
+      : `${unsubmittedPercent}%`}), ${availableWidth})`;
+    fill.style.width = confirmedWidth;
     unsubmittedFill.dataset.tooltip = `تاخیر جاری تمارین ارسال نشده: ${formatUsedHours(summary.unsubmittedHours)}`;
     progress.appendChild(unsubmittedFill);
   }
