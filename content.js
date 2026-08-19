@@ -6,7 +6,7 @@ const COURSE_TOTAL_ID = "deadline-viewer-course-total";
 const COURSE_CACHE_PREFIX = "qdv-course-delay";
 const COURSE_DELAY_BUCKETS_KEY = "qdv-course-delay-buckets:v1";
 const COURSE_DELAY_BUCKET_PANEL_ID = "deadline-viewer-delay-buckets";
-const DELAY_BUCKET_PROGRESS_SEGMENT_GAP_PX = 4;
+const DELAY_BUCKET_PROGRESS_HEIGHT_PX = 8;
 const DELAY_BUCKET_PROGRESS_MIN_SEGMENT_PX = 8;
 const COURSE_FOLLOW_STATE_KEY = "qdv-course-follow-state:v1";
 const COURSE_FOLLOW_STATE_MIRROR_KEY = "qdv-course-follow-state-mirror:v1";
@@ -1550,7 +1550,7 @@ function injectStyles() {
 
     #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-progress {
       position: relative;
-      height: 8px;
+      height: ${DELAY_BUCKET_PROGRESS_HEIGHT_PX}px;
       margin: 10px 0;
       overflow: visible;
       background: var(--qdv-primary-soft);
@@ -5832,38 +5832,39 @@ function createDelayBucketProgress(summary) {
     ? Math.min(100 - usedPercent, Math.max(0, (summary.unsubmittedHours / summary.capacityHours) * 100))
     : 0;
 
-  const fill = document.createElement("div");
-  fill.className = "qdv-bucket-progress-fill";
-  fill.style.left = "0%";
-  fill.style.width = `${usedPercent}%`;
-  progress.appendChild(fill);
+  const hasConfirmedSegment = usedPercent > 0;
+  let confirmedWidth = `${usedPercent}%`;
 
   if (unsubmittedPercent > 0) {
     const unsubmittedFill = document.createElement("div");
     unsubmittedFill.className = "qdv-bucket-progress-fill is-unsubmitted";
-    const gap = `${DELAY_BUCKET_PROGRESS_SEGMENT_GAP_PX}px`;
-    const minimumWidth = `${DELAY_BUCKET_PROGRESS_MIN_SEGMENT_PX}px`;
-    const hasConfirmedSegment = usedPercent > 0;
+    const overlap = `${DELAY_BUCKET_PROGRESS_HEIGHT_PX / 2}px`;
+    const minimumVisibleWidth = `${DELAY_BUCKET_PROGRESS_MIN_SEGMENT_PX}px`;
+    const minimumRenderedWidth = `calc(${minimumVisibleWidth} + ${overlap})`;
+    const liveWidth = hasConfirmedSegment
+      ? `max(${minimumRenderedWidth}, calc(${unsubmittedPercent}% + ${overlap}))`
+      : `max(${minimumVisibleWidth}, ${unsubmittedPercent}%)`;
     const overflowCorrection = hasConfirmedSegment
-      ? `max(0px, calc(${usedPercent}% + ${gap} + ${minimumWidth} - 100%))`
+      ? `max(0px, calc(${liveWidth} - calc(${unsubmittedPercent}% + ${overlap})))`
       : "0px";
-    const confirmedWidth = hasConfirmedSegment
+    confirmedWidth = hasConfirmedSegment
       ? `calc(${usedPercent}% - ${overflowCorrection})`
       : "0%";
-    const availableWidth = hasConfirmedSegment
-      ? `calc(100% - ${usedPercent}% + ${overflowCorrection} - ${gap})`
-      : "100%";
+    const liveLeft = hasConfirmedSegment
+      ? `max(0px, calc(${confirmedWidth} - ${overlap}))`
+      : "0px";
 
-    unsubmittedFill.style.left = hasConfirmedSegment
-      ? `calc(${usedPercent}% - ${overflowCorrection} + ${gap})`
-      : "0%";
-    unsubmittedFill.style.width = `min(max(${minimumWidth}, ${hasConfirmedSegment
-      ? `calc(${unsubmittedPercent}% - ${gap})`
-      : `${unsubmittedPercent}%`}), ${availableWidth})`;
-    fill.style.width = confirmedWidth;
+    unsubmittedFill.style.left = liveLeft;
+    unsubmittedFill.style.width = `min(${liveWidth}, calc(100% - ${liveLeft}))`;
     unsubmittedFill.dataset.tooltip = `تاخیر جاری تمارین ارسال نشده: ${formatUsedHours(summary.unsubmittedHours)}`;
     progress.appendChild(unsubmittedFill);
   }
+
+  const fill = document.createElement("div");
+  fill.className = "qdv-bucket-progress-fill";
+  fill.style.left = "0%";
+  fill.style.width = confirmedWidth;
+  progress.appendChild(fill);
 
   return progress;
 }
