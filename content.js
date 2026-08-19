@@ -6,6 +6,7 @@ const COURSE_TOTAL_ID = "deadline-viewer-course-total";
 const COURSE_CACHE_PREFIX = "qdv-course-delay";
 const COURSE_DELAY_BUCKETS_KEY = "qdv-course-delay-buckets:v1";
 const COURSE_DELAY_BUCKET_PANEL_ID = "deadline-viewer-delay-buckets";
+const DELAY_BUCKET_PROGRESS_SEGMENT_GAP_PERCENT = 0.75;
 const COURSE_FOLLOW_STATE_KEY = "qdv-course-follow-state:v1";
 const COURSE_FOLLOW_STATE_MIRROR_KEY = "qdv-course-follow-state-mirror:v1";
 const ASSIGNMENT_STATE_KEY = "qdv-assignment-state:v1";
@@ -1562,28 +1563,16 @@ function injectStyles() {
       height: 100%;
       width: 0;
       background: var(--qdv-primary);
-      transition: width 160ms ease, left 160ms ease;
-    }
-
-    #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-progress-fill.is-confirmed {
       border-radius: 999px;
-    }
-
-    #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-progress.has-used.has-unsubmitted .qdv-bucket-progress-fill.is-confirmed {
-      border-radius: 999px 0 0 999px;
+      transition: width 160ms ease, left 160ms ease;
     }
 
     #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-progress-fill.is-unsubmitted {
       --qdv-tooltip-bg: var(--qdv-surface);
       --qdv-tooltip-border: var(--qdv-border);
       background: color-mix(in srgb, var(--qdv-primary) 42%, var(--qdv-surface));
-      border-radius: 999px;
       cursor: help;
       pointer-events: auto;
-    }
-
-    #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-progress.has-used.has-unsubmitted .qdv-bucket-progress-fill.is-unsubmitted {
-      border-radius: 0 999px 999px 0;
     }
 
     #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-progress-fill.is-unsubmitted::before,
@@ -5842,20 +5831,21 @@ function createDelayBucketProgress(summary) {
     ? Math.min(100 - usedPercent, Math.max(0, (summary.unsubmittedHours / summary.capacityHours) * 100))
     : 0;
 
-  progress.classList.toggle("has-used", usedPercent > 0);
-  progress.classList.toggle("has-unsubmitted", unsubmittedPercent > 0);
-
   const fill = document.createElement("div");
-  fill.className = "qdv-bucket-progress-fill is-confirmed";
+  fill.className = "qdv-bucket-progress-fill";
   fill.style.left = "0%";
   fill.style.width = `${usedPercent}%`;
   progress.appendChild(fill);
 
-  if (unsubmittedPercent > 0) {
+  const hasConfirmedSegmentGap = usedPercent > 0
+    && unsubmittedPercent > DELAY_BUCKET_PROGRESS_SEGMENT_GAP_PERCENT;
+
+  if (unsubmittedPercent > 0 && (!usedPercent || hasConfirmedSegmentGap)) {
     const unsubmittedFill = document.createElement("div");
     unsubmittedFill.className = "qdv-bucket-progress-fill is-unsubmitted";
-    unsubmittedFill.style.left = `${usedPercent}%`;
-    unsubmittedFill.style.width = `${unsubmittedPercent}%`;
+    const gapPercent = usedPercent ? DELAY_BUCKET_PROGRESS_SEGMENT_GAP_PERCENT : 0;
+    unsubmittedFill.style.left = `calc(${usedPercent}% + ${gapPercent}%)`;
+    unsubmittedFill.style.width = `calc(${unsubmittedPercent}% - ${gapPercent}%)`;
     unsubmittedFill.dataset.tooltip = `تاخیر جاری تمارین ارسال نشده: ${formatUsedHours(summary.unsubmittedHours)}`;
     progress.appendChild(unsubmittedFill);
   }
