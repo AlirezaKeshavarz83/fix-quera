@@ -706,6 +706,36 @@ function injectStyles() {
       font-weight: 500;
     }
 
+    .qdv-assignment-delay-clock {
+      display: block;
+      flex: 0 0 10px;
+      width: 10px;
+      height: 10px;
+      overflow: visible;
+    }
+
+    .qdv-assignment-delay-clock-hand {
+      transform-box: fill-box;
+      transform-origin: center;
+      animation: qdv-assignment-delay-clock-tick 6s steps(12, end) infinite;
+    }
+
+    @keyframes qdv-assignment-delay-clock-tick {
+      from {
+        transform: rotate(0deg);
+      }
+
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .qdv-assignment-delay-clock-hand {
+        animation: none;
+      }
+    }
+
     .qdv-assignment-delay:not(.is-loading):not(.is-stale):not(.is-error):not(.is-unsubmitted-delay) {
       color: var(--qdv-primary);
     }
@@ -1470,6 +1500,14 @@ function injectStyles() {
       justify-content: space-between;
     }
 
+    #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-metrics {
+      direction: ltr;
+    }
+
+    #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-metric {
+      direction: rtl;
+    }
+
     #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-card-name {
       min-width: 0;
       color: var(--qdv-text);
@@ -1512,7 +1550,7 @@ function injectStyles() {
       position: relative;
       height: 8px;
       margin: 10px 0;
-      overflow: hidden;
+      overflow: visible;
       background: var(--qdv-primary-soft);
       border-radius: 999px;
     }
@@ -1529,9 +1567,58 @@ function injectStyles() {
     }
 
     #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-progress-fill.is-unsubmitted {
-      background: #b7791f;
+      --qdv-tooltip-bg: var(--qdv-surface);
+      --qdv-tooltip-border: var(--qdv-border);
+      background: color-mix(in srgb, var(--qdv-primary) 42%, var(--qdv-surface));
       cursor: help;
       pointer-events: auto;
+    }
+
+    #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-progress-fill.is-unsubmitted::before,
+    #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-progress-fill.is-unsubmitted::after {
+      position: absolute;
+      opacity: 0;
+      transition: opacity 120ms ease, transform 120ms ease;
+      z-index: 10000;
+    }
+
+    #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-progress-fill.is-unsubmitted::before {
+      content: "";
+      inset: -8px 0;
+      pointer-events: auto;
+    }
+
+    #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-progress-fill.is-unsubmitted::after {
+      content: attr(data-tooltip);
+      bottom: calc(100% + 9px);
+      left: 50%;
+      width: max-content;
+      max-width: 280px;
+      padding: 7px 9px;
+      color: var(--qdv-text);
+      background: var(--qdv-tooltip-bg);
+      border: 1px solid var(--qdv-tooltip-border);
+      border-radius: 4px;
+      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.18);
+      box-sizing: border-box;
+      direction: rtl;
+      font-family: inherit;
+      font-size: 11px;
+      font-weight: 500;
+      line-height: 1.5;
+      pointer-events: none;
+      text-align: right;
+      transform: translate(-50%, 2px);
+      white-space: normal;
+    }
+
+    #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-progress-fill.is-unsubmitted:hover::before {
+      opacity: 1;
+    }
+
+    #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-progress-fill.is-unsubmitted:hover::after {
+      opacity: 1;
+      transform: translate(-50%, 0);
     }
 
     #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-card.is-over .qdv-bucket-progress-fill:not(.is-unsubmitted) {
@@ -1561,10 +1648,6 @@ function injectStyles() {
 
     #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-metric-value.is-over {
       color: #dc4040;
-    }
-
-    #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-metric-value.is-estimated {
-      color: #b7791f;
     }
 
     #${COURSE_DELAY_BUCKET_PANEL_ID} button,
@@ -2075,7 +2158,8 @@ function injectStyles() {
     html[data-theme="dark"] #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-progress-fill.is-unsubmitted,
     [data-theme="dark"] #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-progress-fill.is-unsubmitted,
     body.chakra-ui-dark #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-progress-fill.is-unsubmitted {
-      background: #fbd38d;
+      --qdv-tooltip-bg: #1a202c;
+      --qdv-tooltip-border: #2d3748;
     }
 
     html[data-theme="dark"] #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-button.is-danger,
@@ -2102,6 +2186,10 @@ function injectStyles() {
       #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-metrics {
         align-items: stretch;
         flex-direction: column;
+      }
+
+      #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-metrics {
+        direction: rtl;
       }
 
       #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-form {
@@ -4244,10 +4332,11 @@ function insertAssignmentDelayBadge(assignment, status, value, options = {}) {
   if (value === "بدون ارسال" || value === "بدون تاخیر") {
     badge.replaceChildren(document.createTextNode(value));
   } else {
-    badge.replaceChildren(
-      document.createTextNode("تاخیر"),
-      createCourseDelayValue(value)
-    );
+    badge.replaceChildren(document.createTextNode("تاخیر"), createCourseDelayValue(value));
+  }
+
+  if (options.isUnsubmittedLiveDelay) {
+    badge.appendChild(createAssignmentDelayClockIcon());
   }
 }
 
@@ -5697,6 +5786,43 @@ function createBucketIcon(name, size = 15) {
   return svg;
 }
 
+function createAssignmentDelayClockIcon() {
+  const svgNamespace = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(svgNamespace, "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("class", "qdv-assignment-delay-clock");
+  svg.setAttribute("aria-hidden", "true");
+  svg.setAttribute("focusable", "false");
+
+  const circle = document.createElementNS(svgNamespace, "circle");
+  circle.setAttribute("cx", "12");
+  circle.setAttribute("cy", "12");
+  circle.setAttribute("r", "8.5");
+  circle.setAttribute("fill", "none");
+  circle.setAttribute("stroke", "currentColor");
+  circle.setAttribute("stroke-width", "1.8");
+  svg.appendChild(circle);
+
+  const hand = document.createElementNS(svgNamespace, "path");
+  hand.setAttribute("class", "qdv-assignment-delay-clock-hand");
+  hand.setAttribute("d", "M12 12V7");
+  hand.setAttribute("fill", "none");
+  hand.setAttribute("stroke", "currentColor");
+  hand.setAttribute("stroke-linecap", "round");
+  hand.setAttribute("stroke-width", "1.8");
+  svg.appendChild(hand);
+
+  const minuteHand = document.createElementNS(svgNamespace, "path");
+  minuteHand.setAttribute("d", "M12 12l3.5 2");
+  minuteHand.setAttribute("fill", "none");
+  minuteHand.setAttribute("stroke", "currentColor");
+  minuteHand.setAttribute("stroke-linecap", "round");
+  minuteHand.setAttribute("stroke-width", "1.6");
+  svg.appendChild(minuteHand);
+
+  return svg;
+}
+
 function createDelayBucketProgress(summary) {
   const progress = document.createElement("div");
   progress.className = "qdv-bucket-progress";
@@ -5723,7 +5849,7 @@ function createDelayBucketProgress(summary) {
     unsubmittedFill.className = "qdv-bucket-progress-fill is-unsubmitted";
     unsubmittedFill.style.left = `${usedPercent}%`;
     unsubmittedFill.style.width = `${unsubmittedPercent}%`;
-    unsubmittedFill.title = summary.unsubmittedAssignments.length === 1
+    unsubmittedFill.dataset.tooltip = summary.unsubmittedAssignments.length === 1
       ? "تاخیر تخمینیِ یک تمرین ارسال‌نشده؛ در مصرف‌شده حساب نشده و از باقی‌مانده کم نمی‌شود."
       : `تاخیر تخمینیِ ${formatPersianNumber(summary.unsubmittedAssignments.length)} تمرین ارسال‌نشده؛ در مصرف‌شده حساب نشده و از باقی‌مانده کم نمی‌شود.`;
     progress.appendChild(unsubmittedFill);
@@ -5747,16 +5873,6 @@ function createDelayBucketMetrics(summary) {
     )
   );
 
-  if (summary.unsubmittedHours > 0) {
-    metrics.appendChild(
-      createDelayBucketMetric(
-        "تاخیر تخمینی",
-        formatUsedHours(summary.unsubmittedHours),
-        { estimated: true }
-      )
-    );
-  }
-
   return metrics;
 }
 
@@ -5771,7 +5887,6 @@ function createDelayBucketMetric(label, value, options = {}) {
   const valueElement = document.createElement("span");
   valueElement.className = "qdv-bucket-metric-value";
   valueElement.classList.toggle("is-over", Boolean(options.over));
-  valueElement.classList.toggle("is-estimated", Boolean(options.estimated));
   valueElement.textContent = value;
 
   metric.append(labelElement, valueElement);
