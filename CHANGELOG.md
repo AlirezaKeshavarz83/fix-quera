@@ -6,7 +6,7 @@ All notable changes to fix-quera are documented in this file.
 
 - Added live delay for overdue assignments without a final submission, shown on assignment badges and in the assignment-page sidebar.
 - Included live delay in course totals and the delay bucket bar as a lighter primary-colored segment, while keeping it separate from consumed delay and remaining capacity until it is confirmed.
-- Removed the standalone live-delay bucket metric and added a CSS hover tooltip on the live-delay segment explaining that it is not counted in مصرف‌شده or deducted from باقی‌مانده.
+- Removed the standalone live-delay bucket metric and added a CSS hover tooltip on the live-delay segment showing its total duration for unsubmitted assignments.
 - Added a small ticking clock affordance to live-delay assignment badges, with reduced-motion support.
 
 ## v0.5.7 - 2026-07-26

@@ -715,8 +715,8 @@ function injectStyles() {
     }
 
     .qdv-assignment-delay-clock-hand {
-      transform-box: fill-box;
-      transform-origin: center;
+      transform-box: view-box;
+      transform-origin: 12px 12px;
       animation: qdv-assignment-delay-clock-tick 6s steps(12, end) infinite;
     }
 
@@ -5812,14 +5812,6 @@ function createAssignmentDelayClockIcon() {
   hand.setAttribute("stroke-width", "1.8");
   svg.appendChild(hand);
 
-  const minuteHand = document.createElementNS(svgNamespace, "path");
-  minuteHand.setAttribute("d", "M12 12l3.5 2");
-  minuteHand.setAttribute("fill", "none");
-  minuteHand.setAttribute("stroke", "currentColor");
-  minuteHand.setAttribute("stroke-linecap", "round");
-  minuteHand.setAttribute("stroke-width", "1.6");
-  svg.appendChild(minuteHand);
-
   return svg;
 }
 
@@ -5849,9 +5841,7 @@ function createDelayBucketProgress(summary) {
     unsubmittedFill.className = "qdv-bucket-progress-fill is-unsubmitted";
     unsubmittedFill.style.left = `${usedPercent}%`;
     unsubmittedFill.style.width = `${unsubmittedPercent}%`;
-    unsubmittedFill.dataset.tooltip = summary.unsubmittedAssignments.length === 1
-      ? "تاخیر جاریِ یک تمرین ارسال‌نشده؛ در مصرف‌شده حساب نشده و از باقی‌مانده کم نمی‌شود."
-      : `تاخیر جاریِ ${formatPersianNumber(summary.unsubmittedAssignments.length)} تمرین ارسال‌نشده؛ در مصرف‌شده حساب نشده و از باقی‌مانده کم نمی‌شود.`;
+    unsubmittedFill.dataset.tooltip = `تاخیر جاری تمارین ارسال نشده: ${formatUsedHours(summary.unsubmittedHours)}`;
     progress.appendChild(unsubmittedFill);
   }
 
