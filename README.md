@@ -13,6 +13,7 @@ Everything runs inside your browser. Fix Quera stores its settings and cached da
 - Both the normal deadline and the hard deadline on assignment pages, with the current state: normal time, extra time, or finished.
 - The extra-time window (`مهلت اضافه`) rounded down, shown in minutes when it is under three hours.
 - Live elapsed delay (`در تاخیر`) once the normal deadline has passed but the hard deadline has not.
+- An estimated live delay for overdue assignments with no final submission yet, shown on assignment badges, course totals, and delay budgets without counting it as consumed delay.
 - Durations and near deadlines in Persian digits, such as `۳ روز و ۲۳ ساعت`. Deadlines within 24 hours show as a timestamp with the date on hover.
 
 ### Know your delay per submission

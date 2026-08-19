@@ -2,6 +2,12 @@
 
 All notable changes to fix-quera are documented in this file.
 
+## v0.5.8 - 2026-08-19
+
+- Added estimated live delay for overdue assignments without a final submission, shown on assignment badges and in the assignment-page sidebar.
+- Included estimated delay in course totals and the delay bucket bar and metric, while keeping it separate from consumed delay and remaining capacity until it is confirmed.
+- Clarified in bucket notes that estimated delay is not counted in مصرف‌شده or deducted from باقی‌مانده.
+
 ## v0.5.7 - 2026-07-26
 
 - Added the extension icon at 16px, 32px, 48px, and 128px sizes, with a transparent background so it sits on light and dark browser themes without a white tile.
