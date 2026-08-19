@@ -1562,16 +1562,28 @@ function injectStyles() {
       height: 100%;
       width: 0;
       background: var(--qdv-primary);
-      border-radius: inherit;
       transition: width 160ms ease, left 160ms ease;
+    }
+
+    #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-progress-fill.is-confirmed {
+      border-radius: 999px;
+    }
+
+    #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-progress.has-used.has-unsubmitted .qdv-bucket-progress-fill.is-confirmed {
+      border-radius: 999px 0 0 999px;
     }
 
     #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-progress-fill.is-unsubmitted {
       --qdv-tooltip-bg: var(--qdv-surface);
       --qdv-tooltip-border: var(--qdv-border);
       background: color-mix(in srgb, var(--qdv-primary) 42%, var(--qdv-surface));
+      border-radius: 999px;
       cursor: help;
       pointer-events: auto;
+    }
+
+    #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-progress.has-used.has-unsubmitted .qdv-bucket-progress-fill.is-unsubmitted {
+      border-radius: 0 999px 999px 0;
     }
 
     #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-progress-fill.is-unsubmitted::before,
@@ -5826,15 +5838,18 @@ function createDelayBucketProgress(summary) {
       ? 100
       : 0;
 
-  const fill = document.createElement("div");
-  fill.className = "qdv-bucket-progress-fill";
-  fill.style.left = "0%";
-  fill.style.width = `${usedPercent}%`;
-  progress.appendChild(fill);
-
   const unsubmittedPercent = summary.capacityHours > 0 && summary.unsubmittedHours > 0
     ? Math.min(100 - usedPercent, Math.max(0, (summary.unsubmittedHours / summary.capacityHours) * 100))
     : 0;
+
+  progress.classList.toggle("has-used", usedPercent > 0);
+  progress.classList.toggle("has-unsubmitted", unsubmittedPercent > 0);
+
+  const fill = document.createElement("div");
+  fill.className = "qdv-bucket-progress-fill is-confirmed";
+  fill.style.left = "0%";
+  fill.style.width = `${usedPercent}%`;
+  progress.appendChild(fill);
 
   if (unsubmittedPercent > 0) {
     const unsubmittedFill = document.createElement("div");
