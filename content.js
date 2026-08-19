@@ -4678,7 +4678,7 @@ function getAssignmentDelayTitle(status, options = {}) {
   }
 
   if (options.isUnsubmittedLiveDelay) {
-    return "هنوز ارسال نشده؛ تاخیر تخمینی تا همین لحظه است، برای ثبت دستی کلیک کنید";
+    return "هنوز ارسال نشده؛ تاخیر جاری تا همین لحظه است، برای ثبت دستی کلیک کنید";
   }
 
   if (status === COURSE_DELAY_STATUS.loading) {
@@ -4918,7 +4918,7 @@ function updateCourseTotalBadge(state) {
       : "مجموع تاخیر ارسال‌های نهایی";
 
   if (hasAllValues && unsubmittedTotalHours > 0) {
-    total.title += "؛ بخش کهربایی تاخیر تخمینیِ تمرین‌های ارسال‌نشده و در حال تاخیر است";
+    total.title += "؛ بخش کهربایی تاخیر جاریِ تمرین‌های ارسال‌نشده و در حال تاخیر است";
   }
 
   total.replaceChildren(
@@ -5850,8 +5850,8 @@ function createDelayBucketProgress(summary) {
     unsubmittedFill.style.left = `${usedPercent}%`;
     unsubmittedFill.style.width = `${unsubmittedPercent}%`;
     unsubmittedFill.dataset.tooltip = summary.unsubmittedAssignments.length === 1
-      ? "تاخیر تخمینیِ یک تمرین ارسال‌نشده؛ در مصرف‌شده حساب نشده و از باقی‌مانده کم نمی‌شود."
-      : `تاخیر تخمینیِ ${formatPersianNumber(summary.unsubmittedAssignments.length)} تمرین ارسال‌نشده؛ در مصرف‌شده حساب نشده و از باقی‌مانده کم نمی‌شود.`;
+      ? "تاخیر جاریِ یک تمرین ارسال‌نشده؛ در مصرف‌شده حساب نشده و از باقی‌مانده کم نمی‌شود."
+      : `تاخیر جاریِ ${formatPersianNumber(summary.unsubmittedAssignments.length)} تمرین ارسال‌نشده؛ در مصرف‌شده حساب نشده و از باقی‌مانده کم نمی‌شود.`;
     progress.appendChild(unsubmittedFill);
   }
 
@@ -6960,7 +6960,7 @@ function createAssignmentSidebarDelayPanel(context, delay) {
   label.textContent = delay.hasManualOverride
     ? "تاخیر دستی"
     : delay.isEstimated
-      ? "تاخیر تخمینی"
+      ? "تاخیر جاری"
       : "تاخیر ارسال نهایی";
 
   const value = document.createElement("div");
