@@ -6,7 +6,7 @@ All notable changes to fix-quera are documented in this file.
 
 - Added estimated live delay for overdue assignments without a final submission, shown on assignment badges and in the assignment-page sidebar.
 - Included estimated delay in course totals and the delay bucket bar and metric, while keeping it separate from consumed delay and remaining capacity until it is confirmed.
-- Clarified in bucket notes that estimated delay is not counted in مصرف‌شده or deducted from باقی‌مانده.
+- Added a hover tooltip on the amber bucket-bar segment explaining that estimated delay is not counted in مصرف‌شده or deducted from باقی‌مانده.
 
 ## v0.5.7 - 2026-07-26
 

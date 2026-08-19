@@ -1530,6 +1530,8 @@ function injectStyles() {
 
     #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-progress-fill.is-unsubmitted {
       background: #b7791f;
+      cursor: help;
+      pointer-events: auto;
     }
 
     #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-card.is-over .qdv-bucket-progress-fill:not(.is-unsubmitted) {
@@ -5721,6 +5723,9 @@ function createDelayBucketProgress(summary) {
     unsubmittedFill.className = "qdv-bucket-progress-fill is-unsubmitted";
     unsubmittedFill.style.left = `${usedPercent}%`;
     unsubmittedFill.style.width = `${unsubmittedPercent}%`;
+    unsubmittedFill.title = summary.unsubmittedAssignments.length === 1
+      ? "تاخیر تخمینیِ یک تمرین ارسال‌نشده؛ در مصرف‌شده حساب نشده و از باقی‌مانده کم نمی‌شود."
+      : `تاخیر تخمینیِ ${formatPersianNumber(summary.unsubmittedAssignments.length)} تمرین ارسال‌نشده؛ در مصرف‌شده حساب نشده و از باقی‌مانده کم نمی‌شود.`;
     progress.appendChild(unsubmittedFill);
   }
 
@@ -5791,14 +5796,6 @@ function createDelayBucketNote(summary, overlaps) {
   if (overlaps.length) {
     note.classList.add("has-warning");
     note.textContent = `${formatPersianNumber(overlaps.length)} تمرین در بیش از یک باکت شمرده می‌شود.`;
-    return note;
-  }
-
-  if (summary.unsubmittedHours > 0) {
-    note.classList.add("has-warning");
-    note.textContent = summary.unsubmittedAssignments.length === 1
-      ? "بخش دوم نوار، تاخیر تخمینیِ یک تمرین ارسال‌نشده است؛ در مصرف‌شده حساب نشده و از باقی‌مانده کم نمی‌شود."
-      : `بخش دوم نوار، تاخیر تخمینیِ ${formatPersianNumber(summary.unsubmittedAssignments.length)} تمرین ارسال‌نشده است؛ در مصرف‌شده حساب نشده و از باقی‌مانده کم نمی‌شود.`;
     return note;
   }
 
