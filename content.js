@@ -1114,6 +1114,16 @@ function injectStyles() {
       font-variant-numeric: tabular-nums;
     }
 
+    #${ASSIGNMENT_SIDEBAR_PANEL_ID} .qdv-sidebar-delay.is-estimated {
+      color: #b7791f;
+      border-color: rgba(183, 121, 31, 0.2);
+    }
+
+    #${ASSIGNMENT_SIDEBAR_PANEL_ID} .qdv-sidebar-delay.is-estimated .qdv-sidebar-delay-label,
+    #${ASSIGNMENT_SIDEBAR_PANEL_ID} .qdv-sidebar-delay.is-estimated .qdv-sidebar-delay-value {
+      color: inherit;
+    }
+
     #${ASSIGNMENT_SIDEBAR_PANEL_ID} .qdv-sidebar-done {
       min-height: 38px;
       justify-content: center;
@@ -1155,6 +1165,13 @@ function injectStyles() {
     body.chakra-ui-dark #${ASSIGNMENT_SIDEBAR_PANEL_ID} .qdv-calendar-warning {
       color: #fbd38d;
       background: rgba(251, 211, 141, 0.1);
+      border-color: rgba(251, 211, 141, 0.18);
+    }
+
+    html[data-theme="dark"] #${ASSIGNMENT_SIDEBAR_PANEL_ID} .qdv-sidebar-delay.is-estimated,
+    [data-theme="dark"] #${ASSIGNMENT_SIDEBAR_PANEL_ID} .qdv-sidebar-delay.is-estimated,
+    body.chakra-ui-dark #${ASSIGNMENT_SIDEBAR_PANEL_ID} .qdv-sidebar-delay.is-estimated {
+      color: #fbd38d;
       border-color: rgba(251, 211, 141, 0.18);
     }
 
@@ -3760,6 +3777,7 @@ async function hydrateCourseDelayState(state) {
         fetchedAt: now,
         status: COURSE_DELAY_STATUS.fresh,
         manual: true,
+        serverNow: cache?.serverNow,
         normalDeadline: cache?.normalDeadline,
         hardDeadline: cache?.hardDeadline,
         extraTimeSeconds: cache?.extraTimeSeconds,
@@ -3781,6 +3799,7 @@ async function hydrateCourseDelayState(state) {
             : undefined,
         fetchedAt: now,
         status: COURSE_DELAY_STATUS.fresh,
+        serverNow: cache?.serverNow,
         normalDeadline: cache?.normalDeadline,
         hardDeadline: cache?.hardDeadline,
         extraTimeSeconds: cache?.extraTimeSeconds,
@@ -3801,6 +3820,7 @@ async function hydrateCourseDelayState(state) {
         delaySamples: Array.isArray(cache.delaySamples) ? cache.delaySamples : undefined,
         fetchedAt: Number(cache.fetchedAt) || 0,
         status: isFresh ? COURSE_DELAY_STATUS.fresh : COURSE_DELAY_STATUS.stale,
+        serverNow: cache.serverNow,
         normalDeadline: cache.normalDeadline,
         hardDeadline: cache.hardDeadline,
         extraTimeSeconds: cache.extraTimeSeconds,
@@ -4157,13 +4177,22 @@ function getDelayDisplayLabel(delaySeconds, options = {}) {
   return formatDelay(delaySeconds);
 }
 
-function getLiveDelaySecondsSinceDeadline(normalDeadline, hardDeadline) {
+function getLiveDelaySecondsSinceDeadline(
+  normalDeadline,
+  hardDeadline,
+  serverNow,
+  fetchedAt
+) {
   const normalMs = Date.parse(normalDeadline || "");
   if (!Number.isFinite(normalMs)) {
     return null;
   }
 
-  const now = Date.now();
+  const serverNowMs = Date.parse(serverNow || "");
+  const fetchedAtMs = Number(fetchedAt);
+  const now = Number.isFinite(serverNowMs) && fetchedAtMs > 0
+    ? serverNowMs + (Date.now() - fetchedAtMs)
+    : Date.now();
   if (now <= normalMs) {
     return null;
   }
@@ -4185,7 +4214,12 @@ function getUnsubmittedLiveDelaySeconds(result, hasManualOverride) {
     return null;
   }
 
-  return getLiveDelaySecondsSinceDeadline(result.normalDeadline, result.hardDeadline);
+  return getLiveDelaySecondsSinceDeadline(
+    result.normalDeadline,
+    result.hardDeadline,
+    result.serverNow,
+    result.fetchedAt
+  );
 }
 
 function waitForCourseQueueDelay() {
@@ -5697,17 +5731,6 @@ function createDelayBucketMetrics(summary) {
   const metrics = document.createElement("div");
   metrics.className = "qdv-bucket-metrics";
 
-  if (summary.unsubmittedHours > 0) {
-    metrics.appendChild(
-      createDelayBucketMetric(
-        "تاخیر تخمینی",
-        formatUsedHours(summary.unsubmittedHours),
-        false,
-        true
-      )
-    );
-  }
-  
   metrics.append(
     createDelayBucketMetric("مصرف‌شده", formatUsedHours(summary.usedHours)),
     createDelayBucketMetric(
@@ -5715,13 +5738,24 @@ function createDelayBucketMetrics(summary) {
       summary.remainingHours < 0
         ? formatUsedHours(Math.abs(summary.remainingHours))
         : formatAllowanceHours(summary.remainingHours),
-      summary.remainingHours < 0
+      { over: summary.remainingHours < 0 }
     )
   );
+
+  if (summary.unsubmittedHours > 0) {
+    metrics.appendChild(
+      createDelayBucketMetric(
+        "تاخیر تخمینی",
+        formatUsedHours(summary.unsubmittedHours),
+        { estimated: true }
+      )
+    );
+  }
+
   return metrics;
 }
 
-function createDelayBucketMetric(label, value, over = false, estimated = false) {
+function createDelayBucketMetric(label, value, options = {}) {
   const metric = document.createElement("div");
   metric.className = "qdv-bucket-metric";
 
@@ -5731,8 +5765,8 @@ function createDelayBucketMetric(label, value, over = false, estimated = false) 
 
   const valueElement = document.createElement("span");
   valueElement.className = "qdv-bucket-metric-value";
-  valueElement.classList.toggle("is-over", over);
-  valueElement.classList.toggle("is-estimated", estimated);
+  valueElement.classList.toggle("is-over", Boolean(options.over));
+  valueElement.classList.toggle("is-estimated", Boolean(options.estimated));
   valueElement.textContent = value;
 
   metric.append(labelElement, valueElement);
@@ -5763,8 +5797,8 @@ function createDelayBucketNote(summary, overlaps) {
   if (summary.unsubmittedHours > 0) {
     note.classList.add("has-warning");
     note.textContent = summary.unsubmittedAssignments.length === 1
-      ? "بخش دوم نوار، تاخیر تخمینیِ یک تمرین ارسال‌نشده است که هنوز جزو مصرف‌شده به حساب نیامده."
-      : `بخش دوم نوار، تاخیر تخمینیِ ${formatPersianNumber(summary.unsubmittedAssignments.length)} تمرین ارسال‌نشده است که هنوز جزو مصرف‌شده به حساب نیامده.`;
+      ? "بخش دوم نوار، تاخیر تخمینیِ یک تمرین ارسال‌نشده است؛ در مصرف‌شده حساب نشده و از باقی‌مانده کم نمی‌شود."
+      : `بخش دوم نوار، تاخیر تخمینیِ ${formatPersianNumber(summary.unsubmittedAssignments.length)} تمرین ارسال‌نشده است؛ در مصرف‌شده حساب نشده و از باقی‌مانده کم نمی‌شود.`;
     return note;
   }
 
@@ -5997,7 +6031,7 @@ function getDelayBucketSummary(courseDelayState, bucket) {
   const unsubmittedAssignments = [];
   includedAssignments.forEach((assignment) => {
     const liveSeconds = courseDelayState.unsubmittedLiveDelaySecondsByAssignment.get(assignment.id);
-    if (!liveSeconds) {
+    if (!Number.isFinite(liveSeconds) || liveSeconds <= 0) {
       return;
     }
 
@@ -6636,11 +6670,18 @@ async function getAssignmentPageEffectiveDelay(context) {
   if (context.courseId) {
     const cache = await readAssignmentDelayCache(context.courseId, context.assignmentId);
     if (cache && cache.hasDelayData !== false) {
-      const seconds = Math.max(0, Number(cache.delaySeconds) || 0);
+      const liveSeconds = getUnsubmittedLiveDelaySeconds(cache, false);
+      const isEstimated = liveSeconds !== null;
+      const seconds = isEstimated
+        ? liveSeconds
+        : Math.max(0, Number(cache.delaySeconds) || 0);
       return {
         seconds,
-        label: getDelayDisplayLabel(seconds, { delaySamples: cache.delaySamples }),
+        label: isEstimated
+          ? formatDelay(seconds)
+          : getDelayDisplayLabel(seconds, { delaySamples: cache.delaySamples }),
         hasManualOverride: false,
+        isEstimated,
         loading: false
       };
     }
@@ -6650,6 +6691,7 @@ async function getAssignmentPageEffectiveDelay(context) {
     seconds: null,
     label: context.courseId ? "..." : "نامشخص",
     hasManualOverride: false,
+    isEstimated: false,
     loading: Boolean(context.courseId)
   };
 }
@@ -6789,13 +6831,25 @@ function removeAssignmentCalendarFallback(container) {
 
 function createAssignmentSidebarDelayPanel(context, delay) {
   const row = document.createElement("div");
-  row.className = "qdv-sidebar-delay";
+  row.className = [
+    "qdv-sidebar-delay",
+    delay.isEstimated ? "is-estimated" : ""
+  ].filter(Boolean).join(" ");
+  row.title = delay.isEstimated
+    ? getAssignmentDelayTitle(COURSE_DELAY_STATUS.fresh, {
+        isUnsubmittedLiveDelay: true
+      })
+    : "";
 
   const text = document.createElement("div");
 
   const label = document.createElement("div");
   label.className = "qdv-sidebar-delay-label";
-  label.textContent = delay.hasManualOverride ? "تاخیر دستی" : "تاخیر ارسال نهایی";
+  label.textContent = delay.hasManualOverride
+    ? "تاخیر دستی"
+    : delay.isEstimated
+      ? "تاخیر تخمینی"
+      : "تاخیر ارسال نهایی";
 
   const value = document.createElement("div");
   value.className = "qdv-sidebar-delay-value";
