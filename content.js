@@ -1576,6 +1576,10 @@ function injectStyles() {
       pointer-events: auto;
     }
 
+    #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-progress-fill.is-unsubmitted.is-underlap {
+      border-radius: 0 999px 999px 0;
+    }
+
     #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-progress-fill.is-unsubmitted::before,
     #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-progress-fill.is-unsubmitted::after {
       position: absolute;
@@ -5838,6 +5842,9 @@ function createDelayBucketProgress(summary) {
   if (unsubmittedPercent > 0) {
     const unsubmittedFill = document.createElement("div");
     unsubmittedFill.className = "qdv-bucket-progress-fill is-unsubmitted";
+    if (hasConfirmedSegment) {
+      unsubmittedFill.classList.add("is-underlap");
+    }
     const overlap = `${DELAY_BUCKET_PROGRESS_HEIGHT_PX / 2}px`;
     const minimumVisibleWidth = `${DELAY_BUCKET_PROGRESS_MIN_SEGMENT_PX}px`;
     const minimumRenderedWidth = `calc(${minimumVisibleWidth} + ${overlap})`;
