@@ -29,6 +29,7 @@ With Fix Quera, you can:
 • Keep Quera's upcoming-deadlines section down to the courses you follow and the work you have not finished yet.
 • Add normal deadlines and hard deadlines to Google Calendar.
 • See the normal deadline and hard deadline together, whether an assignment is in normal time, extra time (مهلت اضافه), or closed, and how much delay is accumulating right now (در تاخیر).
+• See a live delay for overdue assignments that have no final submission yet, on assignment badges, course totals, and delay budgets; the live delay is kept separate from consumed delay and remaining capacity.
 • Set an assignment's delay yourself when it was not submitted on Quera, and have it count in totals and budgets.
 
 Privacy: Fix Quera runs only on quera.org. It uses extension storage for local settings and a local cache, and everything stays in your browser. No account, no server, no analytics, no remote code. Calendar buttons only open a prefilled Google Calendar page; saving the event is still your choice.
@@ -83,6 +84,7 @@ With Fix Quera, you can:
 - Keep Quera's upcoming-deadlines section down to the courses you follow and the work you have not finished yet.
 - Add normal deadlines and hard deadlines to Google Calendar.
 - See the normal deadline and hard deadline together, whether an assignment is in normal time, extra time (مهلت اضافه), or closed, and how much delay is accumulating right now (در تاخیر).
+- See a live delay for overdue assignments that have no final submission yet, on assignment badges, course totals, and delay budgets; the live delay is kept separate from consumed delay and remaining capacity.
 - Set an assignment's delay yourself when it was not submitted on Quera, and have it count in totals and budgets.
 
 Privacy: Fix Quera runs only on quera.org, collects no data, and sends nothing anywhere. Its cache and your settings live in local extension storage. No analytics, no remote code, no account.

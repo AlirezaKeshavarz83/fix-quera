@@ -2,6 +2,14 @@
 
 All notable changes to fix-quera are documented in this file.
 
+## v0.5.8 - 2026-08-19
+
+- Added a live delay (`تاخیر جاری`) for overdue assignments that have no final submission yet, shown on assignment badges next to a small ticking clock, in the assignment-page sidebar, in course totals, and as a lighter primary-colored segment on the delay budget bar that explains itself on hover.
+- Kept the live delay separate from consumed delay and remaining capacity, so a budget is only charged once a final submission confirms the delay.
+- Turned the live segment on the delay budget bar a faded red when the live delay would push the budget past its capacity, before any of it is confirmed.
+- Prefilled the manual-delay dialog on assignment pages with the live delay instead of zero.
+- Ordered the delay budget figures as `مصرف‌شده` then `باقی‌مانده`, matching the direction the bar fills.
+
 ## v0.5.7 - 2026-07-26
 
 - Added the extension icon at 16px, 32px, 48px, and 128px sizes, with a transparent background so it sits on light and dark browser themes without a white tile.
