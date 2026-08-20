@@ -1576,6 +1576,10 @@ function injectStyles() {
       pointer-events: auto;
     }
 
+    #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-progress-fill.is-unsubmitted.is-projected-over {
+      background: color-mix(in srgb, #dc4040 42%, var(--qdv-surface));
+    }
+
     #${COURSE_DELAY_BUCKET_PANEL_ID} .qdv-bucket-progress-fill.is-unsubmitted.is-underlap {
       border-radius: 0 999px 999px 0;
     }
@@ -5842,6 +5846,9 @@ function createDelayBucketProgress(summary) {
   if (unsubmittedPercent > 0) {
     const unsubmittedFill = document.createElement("div");
     unsubmittedFill.className = "qdv-bucket-progress-fill is-unsubmitted";
+    if (summary.projectedOverCapacity) {
+      unsubmittedFill.classList.add("is-projected-over");
+    }
     if (hasConfirmedSegment) {
       unsubmittedFill.classList.add("is-underlap");
     }
@@ -6175,6 +6182,8 @@ function getDelayBucketSummary(courseDelayState, bucket) {
   });
 
   const capacityHours = Math.max(0, Number(bucket.capacityHours) || 0);
+  const projectedOverCapacity = capacityHours > 0
+    && usedHours + unsubmittedHours > capacityHours;
   return {
     assignments: includedAssignments,
     chargedHoursByAssignment,
@@ -6182,6 +6191,7 @@ function getDelayBucketSummary(courseDelayState, bucket) {
     unsubmittedHours,
     unsubmittedAssignments,
     capacityHours,
+    projectedOverCapacity,
     remainingHours: capacityHours - usedHours,
     pendingCount,
     failedCount
