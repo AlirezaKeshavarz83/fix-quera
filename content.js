@@ -18,6 +18,7 @@ const ASSIGNMENT_CALENDAR_BUTTON_CLASS = "qdv-assignment-calendar-button";
 const COURSE_ASSIGNMENT_CALENDAR_BUTTON_CLASS = "qdv-course-assignment-calendar-button";
 const ASSIGNMENT_CALENDAR_FALLBACK_CLASS = "qdv-assignment-calendar-fallback";
 const ASSIGNMENT_SIDEBAR_PANEL_ID = "qdv-assignment-sidebar-state";
+const COURSE_ADD_LINK_CLASS = "qdv-course-add-link";
 const CACHE_TTL_HARD_DEADLINE_MS = 3 * 24 * 60 * 60 * 1000;
 const CACHE_TTL_ACTIVE_COURSE_MS = 60 * 60 * 1000;
 const CACHE_TTL_ACTIVE_ASSIGNMENT_MS = 5 * 60 * 1000;
@@ -53,6 +54,8 @@ let courseFollowObserver = null;
 let courseFollowRenderTimer = null;
 let lastCourseFollowRenderKey = "";
 let courseBucketEditor = null;
+let courseNotFoundObserver = null;
+let courseNotFoundRenderTimer = null;
 
 const rateLimiter = {
   tier: 1,
@@ -2188,6 +2191,59 @@ function injectStyles() {
     [data-theme="dark"] .qdv-bucket-modal .qdv-bucket-button:not(.is-subtle):not(.is-danger),
     body.chakra-ui-dark .qdv-bucket-modal .qdv-bucket-button:not(.is-subtle):not(.is-danger) {
       color: #12212a;
+    }
+
+    .${COURSE_ADD_LINK_CLASS} {
+      --qdv-course-add-primary: var(--colors-primary, #0e7eaa);
+      --qdv-course-add-primary-soft: var(--colors-primary-hover-opaque, rgba(0, 168, 214, 0.07));
+      --qdv-course-add-text: var(--chakra-colors-text-normal, #1a202c);
+      --qdv-course-add-border: var(--colors-border, var(--chakra-colors-border-gray, #e2e8f0));
+      align-items: center;
+      align-self: center;
+      background: transparent;
+      border: 1px solid var(--qdv-course-add-border);
+      border-radius: 5.25px;
+      color: var(--qdv-course-add-primary);
+      display: inline-flex;
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 500;
+      justify-content: center;
+      line-height: 1.2;
+      margin-block-start: 12px;
+      min-height: 35px;
+      max-width: 100%;
+      padding: 0 12px;
+      text-decoration: none;
+      transition: background-color 120ms cubic-bezier(0.2, 0, 0, 1),
+        border-color 120ms cubic-bezier(0.2, 0, 0, 1);
+    }
+
+    .${COURSE_ADD_LINK_CLASS}:hover,
+    .${COURSE_ADD_LINK_CLASS}:focus {
+      background: var(--qdv-course-add-primary-soft);
+      border-color: var(--qdv-course-add-primary);
+      color: var(--qdv-course-add-primary);
+    }
+
+    .${COURSE_ADD_LINK_CLASS}:focus {
+      outline: 2px solid var(--qdv-course-add-primary-soft);
+      outline-offset: 1px;
+    }
+
+    html[data-theme="dark"] .${COURSE_ADD_LINK_CLASS},
+    [data-theme="dark"] .${COURSE_ADD_LINK_CLASS},
+    body.chakra-ui-dark .${COURSE_ADD_LINK_CLASS} {
+      --qdv-course-add-primary: #91def3;
+      --qdv-course-add-primary-soft: rgba(145, 222, 243, 0.12);
+      --qdv-course-add-text: #edf2f7;
+      --qdv-course-add-border: #2d3748;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .${COURSE_ADD_LINK_CLASS} {
+        transition: none;
+      }
     }
 
     @media (max-width: 640px) {
@@ -6282,10 +6338,122 @@ function removeExistingCourseUi() {
 
   document.getElementById(COURSE_TOTAL_ID)?.remove();
   document.getElementById(COURSE_DELAY_BUCKET_PANEL_ID)?.remove();
+  removeExistingCourseAddLink();
   document.querySelectorAll(".qdv-course-delay").forEach((element) => element.remove());
   document.querySelectorAll(`.${COURSE_ASSIGNMENT_CALENDAR_BUTTON_CLASS}`).forEach((element) => element.remove());
   document.querySelectorAll(`.${ASSIGNMENT_CALENDAR_FALLBACK_CLASS}`).forEach((element) => element.remove());
   courseBucketEditor = null;
+}
+
+function removeExistingCourseAddLink() {
+  document.querySelectorAll(`.${COURSE_ADD_LINK_CLASS}`).forEach((element) => element.remove());
+}
+
+function findCourseNotFoundContainer() {
+  const root = document.getElementById("__next") || document.body;
+  if (!root) {
+    return null;
+  }
+
+  const notFoundImage = root.querySelector('img[alt="404 Not found"]');
+  const notFoundMessage = Array.from(root.querySelectorAll("p")).find(
+    (element) => normalizeText(element.textContent || "") === "صفحه مورد نظر وجود ندارد"
+  );
+
+  if (!notFoundImage && !notFoundMessage) {
+    return null;
+  }
+
+  if (notFoundMessage) {
+    let container = notFoundMessage.closest("div");
+
+    if (notFoundImage && container && !container.contains(notFoundImage)) {
+      container = notFoundMessage.parentElement;
+      while (container && container !== root && !container.contains(notFoundImage)) {
+        container = container.parentElement;
+      }
+    }
+
+    if (container && container !== root) {
+      return container;
+    }
+  }
+
+  return notFoundImage?.closest("div") || null;
+}
+
+function renderCourseAddLink() {
+  if (!isCoursePage()) {
+    removeExistingCourseAddLink();
+    return;
+  }
+
+  const container = findCourseNotFoundContainer();
+  if (!container) {
+    removeExistingCourseAddLink();
+    return;
+  }
+
+  if (container.querySelector(`.${COURSE_ADD_LINK_CLASS}`)) {
+    return;
+  }
+
+  const courseId = getCourseId();
+  if (!courseId) {
+    return;
+  }
+
+  injectStyles();
+
+  const link = document.createElement("a");
+  link.className = COURSE_ADD_LINK_CLASS;
+  link.dir = "rtl";
+  link.href = `https://quera.org/course/add_to_course/course/${courseId}/`;
+  link.textContent = "ثبت‌نام در این کلاس";
+  link.setAttribute("aria-label", "ثبت‌نام در این کلاس");
+  container.appendChild(link);
+}
+
+function scheduleCourseAddLink(delayMs = 100) {
+  if (courseNotFoundRenderTimer) {
+    clearTimeout(courseNotFoundRenderTimer);
+  }
+
+  courseNotFoundRenderTimer = setTimeout(() => {
+    runSafely(() => {
+      courseNotFoundRenderTimer = null;
+      renderCourseAddLink();
+    });
+  }, delayMs);
+}
+
+function observeCourseNotFound() {
+  if (courseNotFoundObserver || !document.body) {
+    return;
+  }
+
+  courseNotFoundObserver = new MutationObserver(() => {
+    runSafely(() => {
+      scheduleCourseAddLink();
+    });
+  });
+
+  courseNotFoundObserver.observe(document.body, {
+    childList: true,
+    subtree: true
+  });
+}
+
+function stopCourseNotFoundObserver() {
+  if (courseNotFoundObserver) {
+    courseNotFoundObserver.disconnect();
+    courseNotFoundObserver = null;
+  }
+
+  if (courseNotFoundRenderTimer) {
+    clearTimeout(courseNotFoundRenderTimer);
+    courseNotFoundRenderTimer = null;
+  }
 }
 
 function removeExistingCourseFollowUi() {
@@ -7203,6 +7371,10 @@ function boot(force = false) {
     if (isCourseListPage() || isCoursePage()) {
       scheduleCourseFollowControls();
     }
+
+    if (isCoursePage()) {
+      scheduleCourseAddLink();
+    }
     return;
   }
 
@@ -7215,15 +7387,18 @@ function boot(force = false) {
     removeExistingCourseFollowUi();
     activeCourseRenderId += 1;
     observeCoursePage();
+    observeCourseNotFound();
     scheduleCourseDelays();
     ensureCourseDelaysScheduled(1200);
     observeCourseFollowControls();
     scheduleCourseFollowControls();
+    scheduleCourseAddLink();
     return;
   }
 
   if (isCourseListPage()) {
     stopCourseObserver();
+    stopCourseNotFoundObserver();
     removeExistingUi();
     removeExistingCourseUi();
     removeExistingCourseFollowUi();
@@ -7234,6 +7409,7 @@ function boot(force = false) {
   }
 
   stopCourseObserver();
+  stopCourseNotFoundObserver();
   stopCourseFollowObserver();
   removeExistingCourseFollowUi();
   removeExistingCourseUi();

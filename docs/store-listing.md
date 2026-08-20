@@ -27,6 +27,7 @@ With Fix Quera, you can:
 • See how late each submission actually was (میزان تاخیر) and how much delay a course has cost you in total (مجموع تاخیر), instead of Quera's ضریب نمره / ضریب تاخیر column.
 • Organise your extra-time allowances into separate delay budgets, and always know how much of each budget is used and how much is left.
 • Keep Quera's upcoming-deadlines section down to the courses you follow and the work you have not finished yet.
+• On an unenrolled course page, offer a direct link to Quera's course registration page without redirecting automatically.
 • Add normal deadlines and hard deadlines to Google Calendar.
 • See the normal deadline and hard deadline together, whether an assignment is in normal time, extra time (مهلت اضافه), or closed, and how much delay is accumulating right now (در تاخیر).
 • See a live delay for overdue assignments that have no final submission yet, on assignment badges, course totals, and delay budgets; the live delay is kept separate from consumed delay and remaining capacity.
@@ -82,6 +83,7 @@ With Fix Quera, you can:
 - See how late each submission actually was (میزان تاخیر) and how much delay a course has cost you in total (مجموع تاخیر), instead of Quera's ضریب نمره / ضریب تاخیر column.
 - Organise your extra-time allowances into separate delay budgets, and always know how much of each budget is used and how much is left.
 - Keep Quera's upcoming-deadlines section down to the courses you follow and the work you have not finished yet.
+- On an unenrolled course page, offer a direct link to Quera's course registration page without redirecting automatically.
 - Add normal deadlines and hard deadlines to Google Calendar.
 - See the normal deadline and hard deadline together, whether an assignment is in normal time, extra time (مهلت اضافه), or closed, and how much delay is accumulating right now (در تاخیر).
 - See a live delay for overdue assignments that have no final submission yet, on assignment badges, course totals, and delay budgets; the live delay is kept separate from consumed delay and remaining capacity.
