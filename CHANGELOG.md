@@ -2,6 +2,10 @@
 
 All notable changes to fix-quera are documented in this file.
 
+## v0.5.9 - 2026-08-20
+
+- Added a «ثبت‌نام در این کلاس» link on course pages that show Quera's 404 page for unenrolled users, pointing to the course registration (`add_to_course`) URL. The link is shown only — no automatic redirect.
+
 ## v0.5.8 - 2026-08-19
 
 - Added a live delay (`تاخیر جاری`) for overdue assignments that have no final submission yet, shown on assignment badges next to a small ticking clock, in the assignment-page sidebar, in course totals, and as a lighter primary-colored segment on the delay budget bar that explains itself on hover.
