@@ -17,7 +17,6 @@ on:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    environment: chrome-web-store
     steps:
       - name: Check out repository
         uses: actions/checkout@v4

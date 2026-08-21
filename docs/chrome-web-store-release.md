@@ -38,8 +38,8 @@ The API needs an OAuth client owned by the same Google account that owns the sto
    production** for a token that lasts until it is revoked; otherwise repeat this step
    whenever publishing fails with `invalid_grant`.
 
-Store the three values as repository secrets `CWS_CLIENT_ID`, `CWS_CLIENT_SECRET`, and
-`CWS_REFRESH_TOKEN` under the `chrome-web-store` environment. Set the repository variable
+Store the three values as Actions repository secrets `CWS_CLIENT_ID`, `CWS_CLIENT_SECRET`, and
+`CWS_REFRESH_TOKEN` (Settings → Secrets and variables → Actions). Set the repository variable
 `CWS_EXTENSION_ID` only if the item ID ever changes.
 
 ## Publishing
