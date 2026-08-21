@@ -72,12 +72,26 @@ jwt="$(
 )"
 
 echo "Uploading $archive to the $channel channel"
-upload_uuid="$(
-  curl -sS -f -X POST "${api}/addons/upload/" \
+upload_response="$(
+  curl -sS -X POST "${api}/addons/upload/" \
     -H "Authorization: JWT ${jwt}" \
     -F "channel=${channel}" \
-    -F "upload=@${archive}" |
-    node -e "let s='';process.stdin.on('data',c=>s+=c).on('end',()=>{const u=JSON.parse(s).uuid;if(!u){throw new Error('no upload uuid in response: '+s)}process.stdout.write(u)})"
+    -F "upload=@${archive}"
+)"
+
+upload_uuid="$(
+  node -e "
+    let response;
+    try {
+      response = JSON.parse(process.argv[1]);
+    } catch {
+      throw new Error('upload endpoint returned non-JSON: ' + process.argv[1]);
+    }
+    if (!response.uuid) {
+      throw new Error('upload failed: ' + JSON.stringify(response));
+    }
+    process.stdout.write(response.uuid);
+  " "$upload_response"
 )"
 echo "Upload $upload_uuid created"
 
