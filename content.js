@@ -19,6 +19,7 @@ const COURSE_ASSIGNMENT_CALENDAR_BUTTON_CLASS = "qdv-course-assignment-calendar-
 const ASSIGNMENT_CALENDAR_FALLBACK_CLASS = "qdv-assignment-calendar-fallback";
 const ASSIGNMENT_SIDEBAR_PANEL_ID = "qdv-assignment-sidebar-state";
 const COURSE_ADD_LINK_CLASS = "qdv-course-add-link";
+const COURSE_ADD_URL_PREFIX = "https://quera.org/course/add_to_course/course/";
 const CACHE_TTL_HARD_DEADLINE_MS = 3 * 24 * 60 * 60 * 1000;
 const CACHE_TTL_ACTIVE_COURSE_MS = 60 * 60 * 1000;
 const CACHE_TTL_ACTIVE_ASSIGNMENT_MS = 5 * 60 * 1000;
@@ -6408,7 +6409,7 @@ function renderCourseAddLink() {
   const link = document.createElement("a");
   link.className = COURSE_ADD_LINK_CLASS;
   link.dir = "rtl";
-  link.href = `https://quera.org/course/add_to_course/course/${courseId}/`;
+  link.href = `${COURSE_ADD_URL_PREFIX}${courseId}/`;
   link.textContent = "ثبت‌نام در این کلاس";
   link.setAttribute("aria-label", "ثبت‌نام در این کلاس");
   container.appendChild(link);
