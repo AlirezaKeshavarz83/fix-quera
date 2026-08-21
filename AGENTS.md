@@ -63,3 +63,4 @@ scripts/package-release.sh 0.4.2
 - Every change should be made on a feature branch and reviewed through a pull request.
 - For a release PR, update `manifest.json` and `CHANGELOG.md`.
 - After the release PR is merged, tag from `main`, create a GitHub Release, and attach fresh zip files from `dist/`.
+- Publishing the GitHub Release uploads the Chrome archive to the Chrome Web Store and submits it for review through `.github/workflows/publish-chrome.yml`. Firefox uploads stay manual. See `docs/chrome-web-store-release.md` for the credentials and the local `scripts/publish-chrome.sh` path.
