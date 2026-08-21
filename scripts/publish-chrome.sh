@@ -49,18 +49,36 @@ if [ ! -f "$archive" ]; then
 fi
 
 echo "Requesting an access token"
-access_token="$(
-  curl -sS -f -X POST https://oauth2.googleapis.com/token \
+token_response="$(
+  curl -sS -X POST https://oauth2.googleapis.com/token \
     -d "client_id=${CWS_CLIENT_ID}" \
     -d "client_secret=${CWS_CLIENT_SECRET}" \
     -d "refresh_token=${CWS_REFRESH_TOKEN}" \
-    -d grant_type=refresh_token |
-    node -e "let s='';process.stdin.on('data',c=>s+=c).on('end',()=>{const t=JSON.parse(s).access_token;if(!t){throw new Error('no access token in token response')}process.stdout.write(t)})"
+    -d grant_type=refresh_token
+)"
+
+access_token="$(
+  node -e "
+    let response;
+    try {
+      response = JSON.parse(process.argv[1]);
+    } catch {
+      throw new Error('token endpoint returned non-JSON: ' + process.argv[1]);
+    }
+    if (!response.access_token) {
+      throw new Error(
+        'token request failed: ' + (response.error ?? 'unknown') +
+        ' (' + (response.error_description ?? 'no description') + ').' +
+        ' invalid_grant usually means CWS_REFRESH_TOKEN is wrong, revoked, or expired.'
+      );
+    }
+    process.stdout.write(response.access_token);
+  " "$token_response"
 )"
 
 echo "Uploading $archive to $extension_id"
 upload_response="$(
-  curl -sS -f -X PUT \
+  curl -sS -X PUT \
     -H "Authorization: Bearer ${access_token}" \
     -H "x-goog-api-version: 2" \
     -T "$archive" \
@@ -69,7 +87,12 @@ upload_response="$(
 echo "$upload_response"
 
 node -e "
-const response = JSON.parse(process.argv[1]);
+let response;
+try {
+  response = JSON.parse(process.argv[1]);
+} catch {
+  throw new Error('upload endpoint returned non-JSON: ' + process.argv[1]);
+}
 if (response.uploadState !== 'SUCCESS') {
   throw new Error('upload failed: ' + JSON.stringify(response.itemError ?? response));
 }
@@ -82,7 +105,7 @@ fi
 
 echo "Publishing to $publish_target"
 publish_response="$(
-  curl -sS -f -X POST \
+  curl -sS -X POST \
     -H "Authorization: Bearer ${access_token}" \
     -H "x-goog-api-version: 2" \
     -H "Content-Length: 0" \
@@ -91,7 +114,12 @@ publish_response="$(
 echo "$publish_response"
 
 node -e "
-const response = JSON.parse(process.argv[1]);
+let response;
+try {
+  response = JSON.parse(process.argv[1]);
+} catch {
+  throw new Error('publish endpoint returned non-JSON: ' + process.argv[1]);
+}
 const statuses = response.status ?? [];
 const failures = statuses.filter((status) => status !== 'OK' && status !== 'ITEM_PENDING_REVIEW');
 if (failures.length > 0) {
