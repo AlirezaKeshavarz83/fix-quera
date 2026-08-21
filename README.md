@@ -36,6 +36,7 @@ Everything runs inside your browser. Fix Quera stores its settings and cached da
 - Mark an assignment as done to drop it from that widget.
 - Set an assignment's delay by hand when it was not submitted on Quera. Overrides flow into course totals and buckets.
 - Active courses start as followed and archived courses as unfollowed, until you choose otherwise. Clearing extension data resets to those defaults.
+- On an unenrolled course page, offer a direct link to Quera's course registration page without redirecting automatically.
 
 ### Get deadlines into your calendar
 
